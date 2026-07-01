@@ -101,27 +101,42 @@ export function UserProfilePage() {
           <h3 className="font-semibold text-gray-900 mb-2">Redes</h3>
           {isMatched ? (
             <div className="space-y-2">
-              {user.instagramConnected && (
-                <a className="flex items-center gap-2 text-sm text-brand-600" href="#">
-                  <InstagramIcon width={18} height={18} /> @{user.name.toLowerCase()}
+              {user.instagramUrl ? (
+                <a
+                  className="flex items-center gap-2 text-sm text-brand-600 break-all"
+                  href={normalizeUrl(user.instagramUrl)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <InstagramIcon width={18} height={18} /> {user.instagramUrl}
                 </a>
-              )}
-              {user.linkedinConnected && (
-                <a className="flex items-center gap-2 text-sm text-brand-600" href="#">
-                  <LinkedinIcon width={18} height={18} /> linkedin.com/in/{user.name.toLowerCase()}
+              ) : null}
+              {user.linkedinUrl ? (
+                <a
+                  className="flex items-center gap-2 text-sm text-brand-600 break-all"
+                  href={normalizeUrl(user.linkedinUrl)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <LinkedinIcon width={18} height={18} /> {user.linkedinUrl}
                 </a>
-              )}
-              {!user.instagramConnected && !user.linkedinConnected && (
-                <p className="text-sm text-gray-400">No ha conectado redes.</p>
+              ) : null}
+              {!user.instagramUrl && !user.linkedinUrl && (
+                <p className="text-sm text-gray-400">No ha añadido redes.</p>
               )}
             </div>
           ) : (
             <div className="space-y-1.5">
               {user.instagramConnected && <TrustBadge kind="instagram" />}
               {user.linkedinConnected && <TrustBadge kind="linkedin" />}
-              <p className="text-xs text-gray-400 mt-2">
-                Los enlaces completos solo se muestran cuando hacéis match.
-              </p>
+              {!user.instagramConnected && !user.linkedinConnected && (
+                <p className="text-sm text-gray-400">No ha conectado redes.</p>
+              )}
+              {(user.instagramConnected || user.linkedinConnected) && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Los enlaces completos solo se muestran cuando hacéis match.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -189,4 +204,10 @@ function Info({ label, value }: { label: string; value: string }) {
       <div className="font-medium text-gray-700 capitalize">{value}</div>
     </div>
   );
+}
+
+/** Asegura que el enlace tenga protocolo para abrirse correctamente. */
+function normalizeUrl(url: string): string {
+  const u = url.trim();
+  return /^https?:\/\//i.test(u) ? u : `https://${u}`;
 }

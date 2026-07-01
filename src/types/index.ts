@@ -38,6 +38,9 @@ export interface User {
   moveInDate: string; // ISO date - fecha de entrada o disponibilidad
   instagramConnected: boolean;
   linkedinConnected: boolean;
+  instagramUrl?: string; // enlace al perfil de Instagram
+  linkedinUrl?: string; // enlace al perfil de LinkedIn
+  instagramShowPhotos?: boolean; // mostrar previsualización de fotos (futuro)
   identityVerified: boolean;
   phoneVerified: boolean;
   preferences: UserPreferences;
@@ -217,6 +220,18 @@ export interface Reference {
   status: ReferenceStatus;
   rating?: number;
   comment?: string;
+  createdAt: string;
+}
+
+export type ResidenceRequestStatus = 'pendiente' | 'aceptada' | 'rechazada';
+
+// Solicitud de un usuario para figurar como residente de un piso. Solo cuando
+// el propietario la acepta, el usuario pasa a la lista de residentes del piso.
+export interface ResidenceRequest {
+  id: string;
+  propertyId: string;
+  userId: string;
+  status: ResidenceRequestStatus;
   createdAt: string;
 }
 

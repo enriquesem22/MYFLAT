@@ -24,7 +24,9 @@ export function PropertyPage() {
   );
   const payments = useAppStore((s) => s.payments);
   const likes = useAppStore((s) => s.likes);
+  const residenceRequests = useAppStore((s) => s.residenceRequests);
   const moveIntoProperty = useAppStore((s) => s.moveIntoProperty);
+  const requestResidence = useAppStore((s) => s.requestResidence);
   const swipe = useAppStore((s) => s.swipe);
   const unsave = useAppStore((s) => s.unsave);
   const [toast, setToast] = useState('');
@@ -38,14 +40,17 @@ export function PropertyPage() {
   const owner = getUser(property.ownerId);
   const compat = calculateUserPropertyCompatibility(me, property);
 
-  // Personas que viven actualmente: residentes declarados + inquilinos con
-  // pagos + el propietario si ha indicado que vive allí.
-  const residentIds = new Set<string>(property.residentIds ?? []);
-  payments
-    .filter((p) => p.propertyId === property.id)
-    .forEach((p) => residentIds.add(p.tenantId));
-  if (property.ownerLivesHere) residentIds.add(property.ownerId);
-  const residents = [...residentIds].map((rid) => getUser(rid)).filter(Boolean);
+  // Personas que viven aquí: SOLO residentes confirmados por el propietario
+  // (+ el propietario si ha indicado que también vive en el piso).
+  const confirmedIds = new Set<string>(property.residentIds ?? []);
+  if (property.ownerLivesHere) confirmedIds.add(property.ownerId);
+  const residents = [...confirmedIds].map((rid) => getUser(rid)).filter(Boolean);
+
+  // Estado de la solicitud de residencia del usuario actual.
+  const isConfirmedResident = confirmedIds.has(me.id);
+  const hasPendingRequest = residenceRequests.some(
+    (r) => r.propertyId === property.id && r.userId === me.id && r.status === 'pendiente',
+  );
 
   const plans = property.plans ?? [];
   const videos = property.videos ?? [];
@@ -245,9 +250,35 @@ export function PropertyPage() {
         {/* Personas que viven actualmente en el piso */}
         <div className="card p-4">
           <h3 className="font-semibold text-gray-900 mb-1">Personas que viven aquí</h3>
+
+          {/* Solicitud de residencia (para quien no es el propietario) */}
+          {!isOwnerOfThis && (
+            <div className="mb-3">
+              {isConfirmedResident ? (
+                <span className="chip bg-emerald-50 text-emerald-600">
+                  Vives aquí · confirmado por el propietario ✅
+                </span>
+              ) : hasPendingRequest ? (
+                <span className="chip bg-amber-50 text-amber-600">
+                  Solicitud enviada · pendiente de confirmación
+                </span>
+              ) : (
+                <button
+                  className="btn-secondary w-full"
+                  onClick={() => {
+                    requestResidence(property.id);
+                    notify('Solicitud enviada al propietario');
+                  }}
+                >
+                  Solicitar aparecer como residente
+                </button>
+              )}
+            </div>
+          )}
+
           {residents.length === 0 ? (
             <p className="text-sm text-gray-400">
-              Todavía no hay residentes registrados en la app.
+              Todavía no hay residentes confirmados.
             </p>
           ) : (
             <div className="space-y-3 mt-2">

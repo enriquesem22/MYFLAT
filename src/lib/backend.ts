@@ -9,6 +9,7 @@ import type {
   Payment,
   Property,
   Reference,
+  ResidenceRequest,
   Review,
   User,
 } from '@/types';
@@ -29,6 +30,7 @@ export interface RemoteData {
   references: Reference[];
   documents: FlatDocument[];
   inventory: InventoryItem[];
+  residenceRequests: ResidenceRequest[];
 }
 
 const TABLES = [
@@ -43,6 +45,7 @@ const TABLES = [
   'references',
   'documents',
   'inventory',
+  'residenceRequests',
 ] as const;
 
 export type TableName = (typeof TABLES)[number];
@@ -75,6 +78,7 @@ export async function fetchAll(): Promise<RemoteData | null> {
     references: result.references as Reference[],
     documents: result.documents as FlatDocument[],
     inventory: result.inventory as InventoryItem[],
+    residenceRequests: result.residenceRequests as ResidenceRequest[],
   };
 }
 

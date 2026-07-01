@@ -31,6 +31,9 @@ create table if not exists public.users (
   "moveInDate" text default '',
   "instagramConnected" boolean default false,
   "linkedinConnected" boolean default false,
+  "instagramUrl" text,
+  "linkedinUrl" text,
+  "instagramShowPhotos" boolean default false,
   "identityVerified" boolean default false,
   "phoneVerified" boolean default false,
   preferences jsonb default '{}'::jsonb,
@@ -170,6 +173,14 @@ create table if not exists public.inventory (
   note text
 );
 
+create table if not exists public."residenceRequests" (
+  id text primary key,
+  "propertyId" text not null,
+  "userId" text not null,
+  status text default 'pendiente',
+  "createdAt" text default ''
+);
+
 -- ---------------------------------------------------------------------------
 -- Row Level Security (RLS) — políticas PERMISIVAS para MVP/demo.
 -- ---------------------------------------------------------------------------
@@ -178,7 +189,7 @@ declare
   t text;
   tables text[] := array[
     'users','properties','likes','matches','messages','payments',
-    'issues','reviews','references','documents','inventory'
+    'issues','reviews','references','documents','inventory','residenceRequests'
   ];
 begin
   foreach t in array tables loop

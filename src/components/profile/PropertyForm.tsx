@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { Property } from '@/types';
-import { imageFileToDataUrl } from '@/utils/media';
+import { uploadImageFile } from '@/lib/storage';
 import { CameraIcon, FileIcon, PlusIcon, XIcon } from '@/components/common/icons';
 
 export interface PropertyDraft {
@@ -50,22 +50,28 @@ export function PropertyForm({ onSubmit, onCancel }: Props) {
     ownerLivesHere: false,
   });
   const [videoUrl, setVideoUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
 
   function set<K extends keyof PropertyDraft>(key: K, value: PropertyDraft[K]) {
     setD((prev) => ({ ...prev, [key]: value }));
   }
 
   async function addImages(files: FileList | null, key: 'photos' | 'plans') {
-    if (!files) return;
-    const urls: string[] = [];
-    for (const file of Array.from(files)) {
-      try {
-        urls.push(await imageFileToDataUrl(file));
-      } catch {
-        /* ignoramos archivos que no se puedan leer */
+    if (!files || files.length === 0) return;
+    setError('');
+    setUploading(true);
+    try {
+      const urls: string[] = [];
+      for (const file of Array.from(files)) {
+        urls.push(await uploadImageFile(file, key === 'plans' ? 'plans' : 'properties'));
       }
+      setD((prev) => ({ ...prev, [key]: [...prev[key], ...urls] }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudieron subir las imágenes.');
+    } finally {
+      setUploading(false);
     }
-    setD((prev) => ({ ...prev, [key]: [...prev[key], ...urls] }));
   }
 
   return (
@@ -256,11 +262,14 @@ export function PropertyForm({ onSubmit, onCancel }: Props) {
         )}
       </div>
 
+      {uploading && <p className="text-sm text-brand-600">Subiendo imágenes…</p>}
+      {error && <p className="text-sm text-red-500">{error}</p>}
+
       <div className="flex gap-3 pt-1">
         <button type="button" className="btn-secondary flex-1" onClick={onCancel}>
           Cancelar
         </button>
-        <button type="submit" className="btn-primary flex-1">
+        <button type="submit" className="btn-primary flex-1" disabled={uploading}>
           Publicar
         </button>
       </div>

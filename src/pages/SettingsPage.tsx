@@ -48,6 +48,7 @@ export function SettingsPage() {
 
         <div className="card divide-y divide-gray-100">
           <Row label="Editar perfil" onClick={() => navigate('/profile/edit')} />
+          <Row label="Guardados" onClick={() => navigate('/saved')} />
           <Row label="Mi piso" onClick={() => navigate('/my-flat')} />
           <Row label="Pagos" onClick={() => navigate('/my-flat/payments')} />
           <Row label="Incidencias" onClick={() => navigate('/my-flat/issues')} />

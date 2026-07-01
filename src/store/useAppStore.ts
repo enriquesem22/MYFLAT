@@ -13,6 +13,7 @@ import type {
   Payment,
   Property,
   Reference,
+  ResidenceRequest,
   Review,
   User,
 } from '@/types';
@@ -67,6 +68,7 @@ interface AppState {
   references: Reference[];
   documents: FlatDocument[];
   inventory: InventoryItem[];
+  residenceRequests: ResidenceRequest[];
 
   // ---- auth / sesión ----
   login: (email: string) => boolean;
@@ -88,6 +90,10 @@ interface AppState {
   // ---- propiedades ----
   addProperty: (data: Omit<Property, 'id' | 'createdAt' | 'updatedAt' | 'photos'> & { photos?: Property['photos'] }) => Property;
   updateProperty: (id: string, patch: Partial<Property>) => void;
+
+  // ---- residentes (con confirmación del propietario) ----
+  requestResidence: (propertyId: string) => void;
+  respondResidence: (requestId: string, accept: boolean) => void;
 
   // ---- tenencia ----
   // Marca que el usuario ha entrado a vivir en un piso: activa "Mi piso" y
@@ -122,6 +128,7 @@ const initialData = () => ({
   references: demoReferences,
   documents: demoDocuments,
   inventory: demoInventory,
+  residenceRequests: [] as ResidenceRequest[],
 });
 
 export const useAppStore = create<AppState>()(
@@ -158,6 +165,7 @@ export const useAppStore = create<AppState>()(
               references: data.references,
               documents: data.documents,
               inventory: data.inventory,
+              residenceRequests: data.residenceRequests,
             });
           }
         } catch (e) {
@@ -334,6 +342,52 @@ export const useAppStore = create<AppState>()(
           properties: s.properties.map((p) => (p.id === id ? { ...p, ...fullPatch } : p)),
         }));
         persistUpdate('properties', id, fullPatch);
+      },
+
+      // ---------------- residentes ----------------
+      requestResidence: (propertyId) => {
+        const me = get().currentUserId;
+        if (!me) return;
+        // No duplicar una solicitud pendiente para el mismo piso.
+        const exists = get().residenceRequests.some(
+          (r) => r.propertyId === propertyId && r.userId === me && r.status === 'pendiente',
+        );
+        if (exists) return;
+        const req: ResidenceRequest = {
+          id: uid('rr'),
+          propertyId,
+          userId: me,
+          status: 'pendiente',
+          createdAt: new Date().toISOString(),
+        };
+        set((s) => ({ residenceRequests: [req, ...s.residenceRequests] }));
+        persistInsert('residenceRequests', req);
+      },
+
+      respondResidence: (requestId, accept) => {
+        const req = get().residenceRequests.find((r) => r.id === requestId);
+        if (!req) return;
+        const status = accept ? 'aceptada' : 'rechazada';
+        set((s) => ({
+          residenceRequests: s.residenceRequests.map((r) =>
+            r.id === requestId ? { ...r, status } : r,
+          ),
+        }));
+        persistUpdate('residenceRequests', requestId, { status });
+
+        // Si se acepta, añadir el usuario a los residentes del piso.
+        if (accept) {
+          const prop = get().properties.find((p) => p.id === req.propertyId);
+          if (prop && !(prop.residentIds ?? []).includes(req.userId)) {
+            const residentIds = [...(prop.residentIds ?? []), req.userId];
+            set((s) => ({
+              properties: s.properties.map((p) =>
+                p.id === prop.id ? { ...p, residentIds } : p,
+              ),
+            }));
+            persistUpdate('properties', prop.id, { residentIds });
+          }
+        }
       },
 
       // ---------------- tenencia ----------------

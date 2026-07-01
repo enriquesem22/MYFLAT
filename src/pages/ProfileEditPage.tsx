@@ -1,9 +1,16 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { ChevronLeft } from '@/components/common/icons';
+import { Avatar } from '@/components/common/Avatar';
+import {
+  CameraIcon,
+  ChevronLeft,
+  InstagramIcon,
+  LinkedinIcon,
+} from '@/components/common/icons';
 import { useAppStore } from '@/store/useAppStore';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
+import { uploadImageFile } from '@/lib/storage';
 import type {
   CleaningLevel,
   LifestylePreference,
@@ -20,9 +27,38 @@ export function ProfileEditPage() {
 
   const [f, setF] = useState({ ...me });
   const [p, setP] = useState({ ...me.preferences });
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState('');
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+
+  async function onPickPhoto(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    setPhotoError('');
+    setPhotoUploading(true);
+    try {
+      const url = await uploadImageFile(file, 'avatars');
+      setF((prev) => ({ ...prev, photoUrl: url }));
+    } catch (e) {
+      setPhotoError(
+        e instanceof Error
+          ? e.message
+          : 'No se pudo subir la foto. Revisa los permisos e inténtalo de nuevo.',
+      );
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
 
   function save() {
-    updateCurrentUser({ ...f, preferences: p });
+    // Mantener sincronizados los indicadores de "conectado" con los enlaces.
+    updateCurrentUser({
+      ...f,
+      preferences: p,
+      instagramConnected: Boolean(f.instagramUrl?.trim()),
+      linkedinConnected: Boolean(f.linkedinUrl?.trim()),
+    });
     navigate('/profile');
   }
 
@@ -56,12 +92,62 @@ export function ProfileEditPage() {
               <input className="input" value={f.city} onChange={(e) => setF({ ...f, city: e.target.value })} />
             </Field>
           </div>
-          <Field label="Foto (URL)">
+          <Field label="Foto de perfil">
+            <div className="flex items-center gap-4">
+              <Avatar name={f.name} photoUrl={f.photoUrl} size={72} />
+              <div className="flex-1 space-y-2">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="btn-secondary flex-1 text-xs"
+                    onClick={() => galleryRef.current?.click()}
+                    disabled={photoUploading}
+                  >
+                    Elegir de galería
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary flex-1 text-xs"
+                    onClick={() => cameraRef.current?.click()}
+                    disabled={photoUploading}
+                  >
+                    <CameraIcon width={15} height={15} /> Hacer foto
+                  </button>
+                </div>
+                {photoUploading && <p className="text-xs text-brand-600">Subiendo foto…</p>}
+                {photoError && <p className="text-xs text-red-500">{photoError}</p>}
+                {f.photoUrl && !photoUploading && (
+                  <button
+                    type="button"
+                    className="text-xs text-red-500"
+                    onClick={() => setF({ ...f, photoUrl: '' })}
+                  >
+                    Quitar foto
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* Galería: sin capture. Cámara: capture="user" (frontal). */}
             <input
-              className="input"
-              value={f.photoUrl}
-              placeholder="https://…"
-              onChange={(e) => setF({ ...f, photoUrl: e.target.value })}
+              ref={galleryRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                onPickPhoto(e.target.files);
+                e.target.value = '';
+              }}
+            />
+            <input
+              ref={cameraRef}
+              type="file"
+              accept="image/*"
+              capture="user"
+              className="hidden"
+              onChange={(e) => {
+                onPickPhoto(e.target.files);
+                e.target.value = '';
+              }}
             />
           </Field>
           <Field label="Profesión">
@@ -78,6 +164,44 @@ export function ProfileEditPage() {
               onChange={(e) => setF({ ...f, bio: e.target.value })}
             />
           </Field>
+        </Section>
+
+        <Section title="Redes sociales">
+          <p className="text-xs text-gray-400 -mt-1">
+            Aumentan la confianza. Antes de hacer match solo se ve que están conectadas; el
+            enlace completo se muestra tras el match.
+          </p>
+          <Field label="Instagram (enlace)">
+            <div className="flex items-center gap-2">
+              <InstagramIcon width={18} height={18} className="text-gray-400 shrink-0" />
+              <input
+                className="input"
+                value={f.instagramUrl ?? ''}
+                placeholder="https://instagram.com/tu_usuario"
+                onChange={(e) => setF({ ...f, instagramUrl: e.target.value })}
+              />
+            </div>
+          </Field>
+          <Field label="LinkedIn (enlace)">
+            <div className="flex items-center gap-2">
+              <LinkedinIcon width={18} height={18} className="text-gray-400 shrink-0" />
+              <input
+                className="input"
+                value={f.linkedinUrl ?? ''}
+                placeholder="https://linkedin.com/in/tu_usuario"
+                onChange={(e) => setF({ ...f, linkedinUrl: e.target.value })}
+              />
+            </div>
+          </Field>
+          <Toggle
+            label="Mostrar fotos de Instagram en mi perfil"
+            value={Boolean(f.instagramShowPhotos)}
+            onChange={(v) => setF({ ...f, instagramShowPhotos: v })}
+          />
+          <p className="text-[11px] text-gray-400">
+            La previsualización de fotos de Instagram requiere su API oficial y aún no está
+            disponible en esta versión. De momento se mostrará el enlace.
+          </p>
         </Section>
 
         <Section title="Objetivo y condiciones">

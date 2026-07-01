@@ -28,8 +28,16 @@ export function MyFlatPage() {
   const issues = useAppStore((s) => s.issues);
   const documents = useAppStore((s) => s.documents);
   const inventory = useAppStore((s) => s.inventory);
+  const residenceRequests = useAppStore((s) => s.residenceRequests);
+  const respondResidence = useAppStore((s) => s.respondResidence);
 
   const [showForm, setShowForm] = useState(false);
+
+  // Solicitudes de residencia pendientes en los pisos del propietario.
+  const myPropertyIds = new Set(properties.map((p) => p.id));
+  const pendingRequests = residenceRequests.filter(
+    (r) => r.status === 'pendiente' && myPropertyIds.has(r.propertyId),
+  );
 
   // Sin piso todavía.
   if (!property) {
@@ -107,6 +115,47 @@ export function MyFlatPage() {
                 setShowForm(false);
               }}
             />
+          </div>
+        )}
+
+        {/* Solicitudes de residencia pendientes (propietario) */}
+        {isOwner && pendingRequests.length > 0 && (
+          <div className="card p-4">
+            <h3 className="font-semibold text-gray-900 mb-1">
+              Solicitudes de residencia ({pendingRequests.length})
+            </h3>
+            <p className="text-xs text-gray-400 mb-3">
+              Personas que piden aparecer como residentes de tus pisos.
+            </p>
+            <div className="space-y-3">
+              {pendingRequests.map((r) => {
+                const u = getUser(r.userId);
+                const prop = properties.find((p) => p.id === r.propertyId);
+                return (
+                  <div key={r.id} className="flex items-center gap-3">
+                    <Avatar name={u?.name ?? '?'} photoUrl={u?.photoUrl} size={40} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 truncate">
+                        {u?.name ?? 'Usuario'}
+                      </div>
+                      <div className="text-xs text-gray-400 truncate">{prop?.title}</div>
+                    </div>
+                    <button
+                      className="btn-primary py-1.5 px-3 text-xs"
+                      onClick={() => respondResidence(r.id, true)}
+                    >
+                      Aceptar
+                    </button>
+                    <button
+                      className="btn-secondary py-1.5 px-3 text-xs"
+                      onClick={() => respondResidence(r.id, false)}
+                    >
+                      Rechazar
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

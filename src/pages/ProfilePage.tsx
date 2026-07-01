@@ -71,14 +71,18 @@ export function ProfilePage() {
             <TrustAction
               icon={<InstagramIcon width={18} height={18} />}
               label="Instagram"
-              connected={me.instagramConnected}
-              onClick={() => updateCurrentUser({ instagramConnected: !me.instagramConnected })}
+              connected={Boolean(me.instagramUrl)}
+              connectedLabel="Añadido"
+              actionLabel="Añadir Instagram"
+              onClick={() => navigate('/profile/edit')}
             />
             <TrustAction
               icon={<LinkedinIcon width={18} height={18} />}
               label="LinkedIn"
-              connected={me.linkedinConnected}
-              onClick={() => updateCurrentUser({ linkedinConnected: !me.linkedinConnected })}
+              connected={Boolean(me.linkedinUrl)}
+              connectedLabel="Añadido"
+              actionLabel="Añadir LinkedIn"
+              onClick={() => navigate('/profile/edit')}
             />
             <TrustAction
               icon={<PhoneIcon width={18} height={18} />}

@@ -25,6 +25,11 @@ export function DiscoverPage() {
 
   const [newMatch, setNewMatch] = useState<Match | null>(null);
 
+  const savedCount = useMemo(
+    () => likes.filter((l) => l.fromUserId === me.id && l.direction === 'save').length,
+    [likes, me.id],
+  );
+
   // Los que buscan habitación ven pisos; compañeros y propietarios ven personas.
   const mode: 'properties' | 'users' = me.role === 'seeker_room' ? 'properties' : 'users';
 
@@ -72,9 +77,15 @@ export function DiscoverPage() {
           <button
             onClick={() => navigate('/saved')}
             aria-label="Guardados"
-            className="text-gray-400 hover:text-gray-600 p-1"
+            className="relative flex items-center gap-1 text-gray-600 hover:text-brand-600 font-medium text-sm px-1"
           >
-            <BookmarkIcon width={22} height={22} />
+            <BookmarkIcon width={20} height={20} />
+            <span>Guardados</span>
+            {savedCount > 0 && (
+              <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand-500 text-white text-[11px] font-bold flex items-center justify-center">
+                {savedCount}
+              </span>
+            )}
           </button>
           <button
             onClick={() => navigate('/settings')}
