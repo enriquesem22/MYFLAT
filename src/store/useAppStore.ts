@@ -23,14 +23,22 @@ import { demoPayments } from '@/data/demoPayments';
 import { demoIssues } from '@/data/demoIssues';
 import { demoReviews, demoReferences } from '@/data/demoReviews';
 import { demoDocuments, demoInventory } from '@/data/demoFlat';
+import { isSupabaseEnabled } from '@/lib/supabase';
+import {
+  fetchAll,
+  persistInsert,
+  persistUpdate,
+  seedIfEmpty,
+  type RemoteData,
+} from '@/lib/backend';
 
 // -----------------------------------------------------------------------------
 // Store central de Myflat.
 //
-// En el MVP toda la información vive en memoria + localStorage (persist).
-// Las acciones están agrupadas por dominio y son el único punto que la UI usa
-// para leer/escribir; sustituir esto por llamadas a Supabase en el futuro no
-// obliga a tocar los componentes.
+// Modo demo: toda la información vive en memoria + localStorage (persist).
+// Modo Supabase (si hay credenciales): se hidrata desde la base de datos y las
+// escrituras se replican en ella (fire-and-forget). En ambos casos la UI lee y
+// escribe siempre a través de este store, sin cambios en los componentes.
 // -----------------------------------------------------------------------------
 
 const uid = (prefix: string) =>
@@ -40,6 +48,11 @@ interface AppState {
   // sesión
   currentUserId: string | null;
   onboardingDone: boolean;
+  ready: boolean; // true cuando ya se ha hidratado (o en modo demo)
+
+  // Carga inicial: en modo Supabase descarga los datos (y siembra demo si la
+  // base está vacía). En modo demo no hace nada.
+  hydrate: () => Promise<void>;
 
   // datos
   users: User[];
@@ -113,7 +126,40 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       currentUserId: null,
       onboardingDone: false,
+      ready: !isSupabaseEnabled, // en modo demo está listo de inmediato
       ...initialData(),
+
+      // ---------------- carga inicial ----------------
+      hydrate: async () => {
+        if (!isSupabaseEnabled) {
+          set({ ready: true });
+          return;
+        }
+        try {
+          // Sembrar datos demo si la base está vacía (primera vez).
+          await seedIfEmpty(initialData() as RemoteData);
+          const data = await fetchAll();
+          if (data) {
+            set({
+              users: data.users,
+              properties: data.properties,
+              likes: data.likes,
+              matches: data.matches,
+              messages: data.messages,
+              payments: data.payments,
+              issues: data.issues,
+              reviews: data.reviews,
+              references: data.references,
+              documents: data.documents,
+              inventory: data.inventory,
+            });
+          }
+        } catch (e) {
+          console.error('[myflat] fallo al hidratar desde Supabase:', e);
+        } finally {
+          set({ ready: true });
+        }
+      },
 
       // ---------------- auth ----------------
       login: (email) => {
@@ -160,20 +206,22 @@ export const useAppStore = create<AppState>()(
           currentUserId: newUser.id,
           onboardingDone: false,
         }));
+        persistInsert('users', newUser);
       },
 
       logout: () => set({ currentUserId: null }),
       setOnboardingDone: (done) => set({ onboardingDone: done }),
 
       // ---------------- usuarios ----------------
-      updateCurrentUser: (patch) =>
+      updateCurrentUser: (patch) => {
+        const id = get().currentUserId;
+        if (!id) return;
+        const fullPatch = { ...patch, updatedAt: new Date().toISOString() };
         set((s) => ({
-          users: s.users.map((u) =>
-            u.id === s.currentUserId
-              ? { ...u, ...patch, updatedAt: new Date().toISOString() }
-              : u,
-          ),
-        })),
+          users: s.users.map((u) => (u.id === id ? { ...u, ...fullPatch } : u)),
+        }));
+        persistUpdate('users', id, fullPatch);
+      },
 
       getUser: (id) => get().users.find((u) => u.id === id),
 
@@ -190,6 +238,7 @@ export const useAppStore = create<AppState>()(
           createdAt: new Date().toISOString(),
         };
         set((s) => ({ likes: [...s.likes, like] }));
+        persistInsert('likes', like);
 
         // Solo "like" (me interesa) puede generar match. En el MVP simulamos la
         // reciprocidad: si damos like, la otra parte "acepta" y se crea match.
@@ -217,7 +266,10 @@ export const useAppStore = create<AppState>()(
             createdAt: new Date().toISOString(),
           };
         }
-        if (match) set((s) => ({ matches: [...s.matches, match as Match] }));
+        if (match) {
+          set((s) => ({ matches: [...s.matches, match as Match] }));
+          persistInsert('matches', match);
+        }
         return match;
       },
 
@@ -237,6 +289,7 @@ export const useAppStore = create<AppState>()(
           createdAt: new Date().toISOString(),
         };
         set((s) => ({ messages: [...s.messages, msg] }));
+        persistInsert('messages', msg);
       },
 
       // ---------------- propiedades ----------------
@@ -250,15 +303,17 @@ export const useAppStore = create<AppState>()(
           updatedAt: now,
         };
         set((s) => ({ properties: [...s.properties, prop] }));
+        persistInsert('properties', prop);
         return prop;
       },
 
-      updateProperty: (id, patch) =>
+      updateProperty: (id, patch) => {
+        const fullPatch = { ...patch, updatedAt: new Date().toISOString() };
         set((s) => ({
-          properties: s.properties.map((p) =>
-            p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p,
-          ),
-        })),
+          properties: s.properties.map((p) => (p.id === id ? { ...p, ...fullPatch } : p)),
+        }));
+        persistUpdate('properties', id, fullPatch);
+      },
 
       // ---------------- tenencia ----------------
       moveIntoProperty: (propertyId) => {
@@ -288,25 +343,27 @@ export const useAppStore = create<AppState>()(
           createdAt: now.toISOString(),
         };
         set((s) => ({ payments: [...s.payments, payment] }));
+        persistInsert('payments', payment);
         return true;
       },
 
       // ---------------- pagos ----------------
-      markPaymentPaid: (id, proofUrl) =>
+      markPaymentPaid: (id, proofUrl) => {
+        const existing = get().payments.find((p) => p.id === id);
+        const patch = { status: 'pagado' as const, proofUrl: proofUrl ?? existing?.proofUrl };
         set((s) => ({
-          payments: s.payments.map((p) =>
-            p.id === id ? { ...p, status: 'pagado', proofUrl: proofUrl ?? p.proofUrl } : p,
-          ),
-        })),
+          payments: s.payments.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+        }));
+        persistUpdate('payments', id, patch);
+      },
 
-      confirmPayment: (id) =>
+      confirmPayment: (id) => {
+        const patch = { status: 'pagado' as const, confirmedAt: new Date().toISOString() };
         set((s) => ({
-          payments: s.payments.map((p) =>
-            p.id === id
-              ? { ...p, status: 'pagado', confirmedAt: new Date().toISOString() }
-              : p,
-          ),
-        })),
+          payments: s.payments.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+        }));
+        persistUpdate('payments', id, patch);
+      },
 
       // ---------------- incidencias ----------------
       addIssue: (data) => {
@@ -320,15 +377,17 @@ export const useAppStore = create<AppState>()(
           updatedAt: now,
         };
         set((s) => ({ issues: [issue, ...s.issues] }));
+        persistInsert('issues', issue);
         return issue;
       },
 
-      updateIssueStatus: (id, status) =>
+      updateIssueStatus: (id, status) => {
+        const patch = { status, updatedAt: new Date().toISOString() };
         set((s) => ({
-          issues: s.issues.map((i) =>
-            i.id === id ? { ...i, status, updatedAt: new Date().toISOString() } : i,
-          ),
-        })),
+          issues: s.issues.map((i) => (i.id === id ? { ...i, ...patch } : i)),
+        }));
+        persistUpdate('issues', id, patch);
+      },
 
       addIssueComment: (issueId, text) => {
         const me = get().currentUserId;
@@ -340,19 +399,21 @@ export const useAppStore = create<AppState>()(
           text: text.trim(),
           createdAt: new Date().toISOString(),
         };
+        const target = get().issues.find((i) => i.id === issueId);
+        const comments = [...(target?.comments ?? []), comment];
         set((s) => ({
           issues: s.issues.map((i) =>
-            i.id === issueId
-              ? { ...i, comments: [...i.comments, comment], updatedAt: comment.createdAt }
-              : i,
+            i.id === issueId ? { ...i, comments, updatedAt: comment.createdAt } : i,
           ),
         }));
+        persistUpdate('issues', issueId, { comments, updatedAt: comment.createdAt });
       },
 
       // ---------------- reviews / referencias ----------------
       addReview: (data) => {
         const review: Review = { ...data, id: uid('rev'), createdAt: new Date().toISOString() };
         set((s) => ({ reviews: [review, ...s.reviews] }));
+        persistInsert('reviews', review);
       },
 
       addReference: (data) => {
@@ -363,13 +424,17 @@ export const useAppStore = create<AppState>()(
           status: 'pendiente',
           createdAt: new Date().toISOString(),
         };
+        // Al pedir una referencia sumamos al contador del usuario.
+        const meUser = get().users.find((u) => u.id === me);
+        const newCount = (meUser?.referencesCount ?? 0) + 1;
         set((s) => ({
           references: [reference, ...s.references],
-          // Al pedir una referencia sumamos al contador del usuario (demo).
           users: s.users.map((u) =>
-            u.id === me ? { ...u, referencesCount: u.referencesCount + 1 } : u,
+            u.id === me ? { ...u, referencesCount: newCount } : u,
           ),
         }));
+        persistInsert('references', reference);
+        if (me) persistUpdate('users', me, { referencesCount: newCount });
       },
 
       resetDemo: () =>
@@ -378,6 +443,12 @@ export const useAppStore = create<AppState>()(
     {
       name: 'myflat-store',
       version: 1,
+      // En modo Supabase los datos vienen de la nube en cada carga, así que solo
+      // persistimos la sesión. En modo demo persistimos todo el estado local.
+      partialize: (state) =>
+        isSupabaseEnabled
+          ? { currentUserId: state.currentUserId, onboardingDone: state.onboardingDone }
+          : state,
     },
   ),
 );

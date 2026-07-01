@@ -36,6 +36,11 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          # Credenciales de Supabase (opcionales). Si no se definen, la app
+          # se construye en modo demo. La anon key es pública por diseño.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

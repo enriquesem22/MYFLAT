@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useAppStore } from '@/store/useAppStore';
+import { LoadingState } from '@/components/common/LoadingState';
 import { LandingPage } from '@/pages/LandingPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
@@ -33,6 +34,22 @@ function RequireAuth({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
+  const ready = useAppStore((s) => s.ready);
+  const hydrate = useAppStore((s) => s.hydrate);
+
+  // Carga inicial de datos (solo hace algo en modo Supabase).
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingState label="Cargando Myflat…" />
+      </div>
+    );
+  }
+
   return (
     <Routes>
       {/* Públicas */}

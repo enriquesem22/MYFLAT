@@ -147,12 +147,29 @@ Toda la lectura/escritura pasa por `src/store/useAppStore.ts`. Para migrar a
 **Supabase** (recomendado) o a una API Node/Express:
 
 1. Crea las tablas según `src/types/index.ts` (users, user_preferences,
-   properties, property_photos, likes, matches, messages, payments, issues,
-   issue_comments, reviews, references, documents).
-2. Sustituye el cuerpo de cada acción del store por llamadas al cliente
-   (`supabase.from('...').select()/insert()/update()`), manteniendo las mismas
-   firmas. Los componentes no necesitan cambios.
-3. Reemplaza el login demo por Supabase Auth (email/password).
+   properties, likes, matches, messages, payments, issues, reviews,
+   references, documents, inventory).
+
+La integración con **Supabase ya está incluida** y se activa por variables de
+entorno (sin ellas, la app funciona en modo demo). Pasos:
+
+1. Crea un proyecto gratis en [supabase.com](https://supabase.com).
+2. En **SQL Editor**, pega y ejecuta `supabase/schema.sql` (crea las tablas y
+   las políticas RLS del MVP).
+3. En **Project Settings → API**, copia la **Project URL** y la **anon public
+   key** (la anon key es pública por diseño; nunca uses la `service_role`).
+4. Define esas dos variables:
+   - Local: crea un archivo `.env` (ver `.env.example`) con `VITE_SUPABASE_URL`
+     y `VITE_SUPABASE_ANON_KEY`.
+   - Despliegue (GitHub Pages): añádelas como **Secrets** del repositorio
+     (`Settings → Secrets and variables → Actions`) con esos mismos nombres.
+     El workflow las inyecta en el build.
+
+Al arrancar con Supabase activo, la app **hidrata** los datos desde la base y,
+si está vacía, **siembra automáticamente** los datos demo. Todas las escrituras
+se replican en Supabase, por lo que **los datos se comparten entre dispositivos**.
+Los componentes no cambian: siguen usando el store (`src/store/useAppStore.ts`),
+que es el único punto de acceso a datos (`src/lib/backend.ts`).
 
 ## 11. Cómo integrar pagos reales en el futuro
 
