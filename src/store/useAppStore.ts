@@ -73,6 +73,11 @@ interface AppState {
   addProperty: (data: Omit<Property, 'id' | 'createdAt' | 'updatedAt' | 'photos'> & { photos?: Property['photos'] }) => Property;
   updateProperty: (id: string, patch: Partial<Property>) => void;
 
+  // ---- tenencia ----
+  // Marca que el usuario ha entrado a vivir en un piso: activa "Mi piso" y
+  // crea su primer pago mensual. Devuelve false si ya vivía allí.
+  moveIntoProperty: (propertyId: string) => boolean;
+
   // ---- pagos ----
   markPaymentPaid: (id: string, proofUrl?: string) => void;
   confirmPayment: (id: string) => void;
@@ -254,6 +259,37 @@ export const useAppStore = create<AppState>()(
             p.id === id ? { ...p, ...patch, updatedAt: new Date().toISOString() } : p,
           ),
         })),
+
+      // ---------------- tenencia ----------------
+      moveIntoProperty: (propertyId) => {
+        const me = get().currentUserId;
+        if (!me) return false;
+        const property = get().properties.find((p) => p.id === propertyId);
+        if (!property) return false;
+
+        // Si ya es inquilino de ese piso (tiene pagos), no duplicar.
+        const already = get().payments.some(
+          (p) => p.propertyId === propertyId && p.tenantId === me,
+        );
+        if (already) return false;
+
+        // Primer pago mensual: vence el día 5 del mes que viene.
+        const now = new Date();
+        const due = new Date(now.getFullYear(), now.getMonth() + 1, 5);
+        const payment: Payment = {
+          id: uid('pay'),
+          propertyId,
+          tenantId: me,
+          ownerId: property.ownerId,
+          amount: property.price,
+          dueDate: due.toISOString().slice(0, 10),
+          status: 'pendiente',
+          landlordPayoutStatus: 'none',
+          createdAt: now.toISOString(),
+        };
+        set((s) => ({ payments: [...s.payments, payment] }));
+        return true;
+      },
 
       // ---------------- pagos ----------------
       markPaymentPaid: (id, proofUrl) =>

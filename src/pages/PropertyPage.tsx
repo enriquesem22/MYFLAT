@@ -20,9 +20,15 @@ export function PropertyPage() {
   const issues = useAppStore((s) =>
     s.issues.filter((i) => i.propertyId === id && i.status === 'resuelta'),
   );
+  const payments = useAppStore((s) => s.payments);
+  const moveIntoProperty = useAppStore((s) => s.moveIntoProperty);
 
   if (!property) return <Navigate to="/discover" replace />;
 
+  const isOwnerOfThis = property.ownerId === me.id;
+  const alreadyLivesHere = payments.some(
+    (p) => p.propertyId === property.id && p.tenantId === me.id,
+  );
   const owner = getUser(property.ownerId);
   const compat = calculateUserPropertyCompatibility(me, property);
   const main = property.photos.find((p) => p.isMain) ?? property.photos[0];
@@ -79,6 +85,43 @@ export function PropertyPage() {
             <p className="text-sm text-gray-600 mt-3">{property.description}</p>
           )}
         </div>
+
+        {/* Activar "Mi piso": para quien busca (no el propietario del anuncio) */}
+        {!isOwnerOfThis && (
+          <div className="card p-4">
+            {alreadyLivesHere ? (
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-semibold text-gray-900">Ya vives aquí ✅</div>
+                  <div className="text-sm text-gray-500">
+                    Gestiona pagos e incidencias en tu panel.
+                  </div>
+                </div>
+                <button className="btn-primary shrink-0" onClick={() => navigate('/my-flat')}>
+                  Ir a Mi piso
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="font-semibold text-gray-900">¿Has conseguido este piso?</div>
+                <p className="text-sm text-gray-500 mt-0.5 mb-3">
+                  Actívalo como tu piso para gestionar el alquiler, los pagos y las
+                  incidencias desde Myflat.
+                </p>
+                <button
+                  className="btn-primary w-full"
+                  onClick={() => {
+                    if (moveIntoProperty(property.id)) {
+                      navigate('/my-flat');
+                    }
+                  }}
+                >
+                  Ya vivo aquí — activar Mi piso
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         <div className="card p-4">
           <CompatibilityScore result={compat} />
