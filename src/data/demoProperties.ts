@@ -1,0 +1,236 @@
+import type { Property } from '@/types';
+
+const now = '2026-06-15T10:00:00.000Z';
+
+function photo(id: string, url: string, isMain = false) {
+  return { id, propertyId: '', url, isMain };
+}
+
+// 6 pisos/habitaciones en Barcelona, Madrid, Valencia y Sevilla.
+export const demoProperties: Property[] = [
+  {
+    id: 'p-gracia',
+    ownerId: 'u-owner-ana',
+    title: 'Habitación luminosa en Gràcia',
+    city: 'Barcelona',
+    neighborhood: 'Gràcia',
+    approximateAddress: 'Cerca de Plaça del Sol',
+    price: 620,
+    deposit: 620,
+    expensesIncluded: true,
+    availableFrom: '2026-08-01',
+    minStayMonths: 6,
+    rooms: 3,
+    bathrooms: 2,
+    currentRoommates: 2,
+    description:
+      'Habitación exterior en piso reformado con balcón. Zona tranquila y muy bien comunicada. Gastos incluidos.',
+    rules: {
+      smoking: false,
+      pets: false,
+      couples: false,
+      visits: 'medias',
+      parties: 'a veces',
+      cleaning: 'alta',
+    },
+    verifiedProperty: true,
+    verifiedOwner: true,
+    hasVideo: true,
+    photos: [
+      photo('ph-1', 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=60', true),
+      photo('ph-2', 'https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=900&q=60'),
+    ],
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'p-poblenou',
+    ownerId: 'u-owner-laia',
+    title: 'Habitación cerca de la playa en Poblenou',
+    city: 'Barcelona',
+    neighborhood: 'Poblenou',
+    approximateAddress: 'A 10 min de Bogatell',
+    price: 590,
+    deposit: 590,
+    expensesIncluded: false,
+    availableFrom: '2026-09-01',
+    minStayMonths: 12,
+    rooms: 4,
+    bathrooms: 2,
+    currentRoommates: 3,
+    description:
+      'Piso amplio en el 22@, ideal para quien trabaja en tecnología. Ambiente joven y sociable.',
+    rules: {
+      smoking: false,
+      pets: true,
+      couples: true,
+      visits: 'frecuentes',
+      parties: 'a veces',
+      cleaning: 'media',
+    },
+    verifiedProperty: true,
+    verifiedOwner: true,
+    hasVideo: false,
+    photos: [
+      photo('ph-3', 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=900&q=60', true),
+      photo('ph-4', 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=900&q=60'),
+    ],
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'p-chamberi',
+    ownerId: 'u-owner-jose',
+    title: 'Habitación en Chamberí, muy céntrica',
+    city: 'Madrid',
+    neighborhood: 'Chamberí',
+    approximateAddress: 'Junto a metro Iglesia',
+    price: 560,
+    deposit: 560,
+    expensesIncluded: true,
+    availableFrom: '2026-07-01',
+    minStayMonths: 6,
+    rooms: 3,
+    bathrooms: 1,
+    currentRoommates: 2,
+    description:
+      'Habitación acogedora en piso clásico madrileño. Gastos incluidos y buena convivencia.',
+    rules: {
+      smoking: false,
+      pets: false,
+      couples: false,
+      visits: 'medias',
+      parties: 'nunca',
+      cleaning: 'alta',
+    },
+    verifiedProperty: true,
+    verifiedOwner: true,
+    hasVideo: false,
+    photos: [
+      photo('ph-5', 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=900&q=60', true),
+    ],
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'p-malasana',
+    ownerId: 'u-owner-jose',
+    title: 'Habitación en Malasaña con mucho ambiente',
+    city: 'Madrid',
+    neighborhood: 'Malasaña',
+    approximateAddress: 'Cerca de Tribunal',
+    price: 610,
+    deposit: 610,
+    expensesIncluded: false,
+    availableFrom: '2026-08-15',
+    minStayMonths: 6,
+    rooms: 4,
+    bathrooms: 2,
+    currentRoommates: 3,
+    description:
+      'En pleno corazón de Malasaña. Ideal para gente sociable a la que le gusta salir.',
+    rules: {
+      smoking: true,
+      pets: true,
+      couples: true,
+      visits: 'frecuentes',
+      parties: 'frecuente',
+      cleaning: 'media',
+    },
+    verifiedProperty: false,
+    verifiedOwner: true,
+    hasVideo: true,
+    photos: [
+      photo('ph-6', 'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=900&q=60', true),
+    ],
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'p-ruzafa',
+    ownerId: 'u-owner-nuria',
+    title: 'Habitación reformada en Ruzafa',
+    city: 'Valencia',
+    neighborhood: 'Ruzafa',
+    approximateAddress: 'Cerca del Mercado de Ruzafa',
+    price: 480,
+    deposit: 480,
+    expensesIncluded: true,
+    availableFrom: '2026-07-15',
+    minStayMonths: 9,
+    rooms: 3,
+    bathrooms: 2,
+    currentRoommates: 1,
+    description:
+      'Piso totalmente reformado en la zona más de moda de Valencia. Muy luminoso.',
+    rules: {
+      smoking: false,
+      pets: true,
+      couples: true,
+      visits: 'medias',
+      parties: 'a veces',
+      cleaning: 'media',
+    },
+    verifiedProperty: true,
+    verifiedOwner: true,
+    hasVideo: true,
+    photos: [
+      photo('ph-7', 'https://images.unsplash.com/photo-1567767292278-a4f21aa2d36e?auto=format&fit=crop&w=900&q=60', true),
+    ],
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'p-triana',
+    ownerId: 'u-owner-manolo',
+    title: 'Habitación en Triana, ambiente familiar',
+    city: 'Sevilla',
+    neighborhood: 'Triana',
+    approximateAddress: 'Junto al puente de Triana',
+    price: 450,
+    deposit: 450,
+    expensesIncluded: false,
+    availableFrom: '2026-08-01',
+    minStayMonths: 12,
+    rooms: 3,
+    bathrooms: 1,
+    currentRoommates: 2,
+    description:
+      'Habitación en piso tranquilo y familiar en el barrio de Triana. Ideal para estudiar o teletrabajar.',
+    rules: {
+      smoking: false,
+      pets: false,
+      couples: false,
+      visits: 'pocas',
+      parties: 'nunca',
+      cleaning: 'alta',
+    },
+    verifiedProperty: false,
+    verifiedOwner: false,
+    hasVideo: false,
+    photos: [
+      photo('ph-8', 'https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=900&q=60', true),
+    ],
+    createdAt: now,
+    updatedAt: now,
+  },
+];
+
+// Rellena el propertyId de cada foto (para no repetirlo a mano arriba).
+demoProperties.forEach((p) => p.photos.forEach((ph) => (ph.propertyId = p.id)));
+
+// Valores por defecto de los campos nuevos (planos, vídeos, residentes).
+demoProperties.forEach((p) => {
+  p.plans = p.plans ?? [];
+  p.videos = p.videos ?? [];
+  p.residentIds = p.residentIds ?? [];
+  p.ownerLivesHere = p.ownerLivesHere ?? false;
+});
+
+// Ejemplo con residentes actuales (piso de Gràcia): viven Marta y Carlos.
+const gracia = demoProperties.find((p) => p.id === 'p-gracia');
+if (gracia) gracia.residentIds = ['u-marta', 'u-carlos'];
+
+// Ejemplo con el propietario viviendo en el piso (Poblenou).
+const poblenou = demoProperties.find((p) => p.id === 'p-poblenou');
+if (poblenou) poblenou.ownerLivesHere = true;
