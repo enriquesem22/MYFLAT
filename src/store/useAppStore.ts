@@ -139,7 +139,10 @@ export const useAppStore = create<AppState>()(
           // Sembrar datos demo si la base está vacía (primera vez).
           await seedIfEmpty(initialData() as RemoteData);
           const data = await fetchAll();
-          if (data) {
+          // Solo sustituimos los datos demo si de verdad hay usuarios en la
+          // nube. Si la BD está vacía o falla (p. ej. no se ejecutó el SQL),
+          // conservamos los datos demo locales para no dejar la app en blanco.
+          if (data && data.users.length > 0) {
             set({
               users: data.users,
               properties: data.properties,
