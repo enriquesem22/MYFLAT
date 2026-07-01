@@ -60,6 +60,10 @@ create table if not exists public.properties (
   "verifiedOwner" boolean default false,
   "hasVideo" boolean default false,
   photos jsonb default '[]'::jsonb,
+  plans jsonb default '[]'::jsonb,
+  videos jsonb default '[]'::jsonb,
+  "residentIds" jsonb default '[]'::jsonb,
+  "ownerLivesHere" boolean default false,
   "createdAt" text default '',
   "updatedAt" text default ''
 );

@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ProfileLevelBadge } from '@/components/badges/ProfileLevelBadge';
 import { TrustBadge } from '@/components/badges/TrustBadge';
 import { ReviewSummary } from '@/components/reviews/ReviewSummary';
 import { CompatibilityScore } from '@/components/common/CompatibilityScore';
+import { SwipeActionsBar } from '@/components/swipe/SwipeActionsBar';
 import { ChevronLeft, InstagramIcon, LinkedinIcon } from '@/components/common/icons';
 import { useAppStore } from '@/store/useAppStore';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
@@ -18,6 +20,10 @@ export function UserProfilePage() {
   const matches = useAppStore((s) => s.matches);
   const reviews = useAppStore((s) => s.reviews.filter((r) => r.reviewedUserId === id));
   const getUser = useAppStore((s) => s.getUser);
+  const likes = useAppStore((s) => s.likes);
+  const swipe = useAppStore((s) => s.swipe);
+  const unsave = useAppStore((s) => s.unsave);
+  const [toast, setToast] = useState('');
 
   if (!user) return <Navigate to="/discover" replace />;
 
@@ -29,6 +35,15 @@ export function UserProfilePage() {
   );
 
   const compat = calculateUserUserCompatibility(me, user);
+  const isSelf = user.id === me.id;
+  const isSaved = likes.some(
+    (l) => l.fromUserId === me.id && l.targetId === user.id && l.direction === 'save',
+  );
+
+  function notify(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(''), 2000);
+  }
 
   return (
     <AppLayout hideNav hideHeader>
@@ -130,6 +145,39 @@ export function UserProfilePage() {
           </div>
         )}
       </div>
+
+      {/* Acciones de swipe dentro del perfil (si no eres tú) */}
+      {!isSelf && (
+        <SwipeActionsBar
+          saved={isSaved}
+          onDislike={() => {
+            swipe('user', user.id, 'dislike');
+            navigate('/discover');
+          }}
+          onSave={() => {
+            if (isSaved) {
+              unsave(user.id);
+              notify('Quitado de guardados');
+            } else {
+              swipe('user', user.id, 'save');
+              notify('Guardado ✓');
+            }
+          }}
+          onLike={() => {
+            const m = swipe('user', user.id, 'like');
+            if (m) navigate(`/matches/${m.id}`);
+            else navigate('/discover');
+          }}
+        />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-28 inset-x-0 flex justify-center z-50 pointer-events-none">
+          <div className="bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow-lg">
+            {toast}
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }

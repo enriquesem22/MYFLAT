@@ -6,8 +6,12 @@ import type { LikeDirection } from '@/types';
 interface Props<T> {
   items: T[];
   keyOf: (item: T) => string;
-  renderCard: (item: T) => ReactNode;
+  renderCard: (item: T, photoIndex: number) => ReactNode;
   onDecision: (item: T, direction: LikeDirection) => void;
+  /** Abrir el perfil completo al tocar la tarjeta. */
+  onOpen: (item: T) => void;
+  /** Nº de fotos del item (para navegar tocando los lados). */
+  photoCountOf?: (item: T) => number;
   emptyState: ReactNode;
 }
 
@@ -18,6 +22,8 @@ export function SwipeDeck<T>({
   keyOf,
   renderCard,
   onDecision,
+  onOpen,
+  photoCountOf,
   emptyState,
 }: Props<T>) {
   const [index, setIndex] = useState(0);
@@ -39,7 +45,7 @@ export function SwipeDeck<T>({
         {next && (
           <div className="absolute inset-0 scale-[0.96] translate-y-2 opacity-60">
             <div className="h-full w-full overflow-hidden rounded-3xl bg-white shadow-sm border border-gray-100">
-              {renderCard(next)}
+              {renderCard(next, 0)}
             </div>
           </div>
         )}
@@ -47,10 +53,11 @@ export function SwipeDeck<T>({
         <SwipeCard
           key={keyOf(current)}
           active
+          photoCount={photoCountOf ? photoCountOf(current) : 1}
+          onOpen={() => onOpen(current)}
           onSwipe={(dir) => decide(dir === 'right' ? 'like' : 'dislike')}
-        >
-          {renderCard(current)}
-        </SwipeCard>
+          render={(photoIndex) => renderCard(current, photoIndex)}
+        />
       </div>
 
       {/* Botones de acción */}
@@ -78,7 +85,7 @@ export function SwipeDeck<T>({
         </button>
       </div>
       <p className="mt-3 text-xs text-gray-400">
-        Desliza o pulsa · {items.length - index} por ver
+        Toca la tarjeta para ver el perfil · {items.length - index} por ver
       </p>
     </div>
   );

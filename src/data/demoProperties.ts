@@ -218,3 +218,19 @@ export const demoProperties: Property[] = [
 
 // Rellena el propertyId de cada foto (para no repetirlo a mano arriba).
 demoProperties.forEach((p) => p.photos.forEach((ph) => (ph.propertyId = p.id)));
+
+// Valores por defecto de los campos nuevos (planos, vídeos, residentes).
+demoProperties.forEach((p) => {
+  p.plans = p.plans ?? [];
+  p.videos = p.videos ?? [];
+  p.residentIds = p.residentIds ?? [];
+  p.ownerLivesHere = p.ownerLivesHere ?? false;
+});
+
+// Ejemplo con residentes actuales (piso de Gràcia): viven Marta y Carlos.
+const gracia = demoProperties.find((p) => p.id === 'p-gracia');
+if (gracia) gracia.residentIds = ['u-marta', 'u-carlos'];
+
+// Ejemplo con el propietario viviendo en el piso (Poblenou).
+const poblenou = demoProperties.find((p) => p.id === 'p-poblenou');
+if (poblenou) poblenou.ownerLivesHere = true;

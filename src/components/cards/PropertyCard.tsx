@@ -7,22 +7,49 @@ import { CalendarIcon, MapPinIcon, UserIcon } from '@/components/common/icons';
 interface Props {
   property: Property;
   compatibility?: CompatibilityResult;
+  /** Índice de la foto que se muestra (para navegar desde la tarjeta). */
+  photoIndex?: number;
 }
 
 /** Contenido de una tarjeta de habitación/piso (foto + datos + badges). */
-export function PropertyCard({ property, compatibility }: Props) {
-  const main = property.photos.find((p) => p.isMain) ?? property.photos[0];
+export function PropertyCard({ property, compatibility, photoIndex = 0 }: Props) {
+  // Ordenamos poniendo la principal primera para que el índice 0 sea la main.
+  const photos = [...property.photos].sort((a, b) => Number(b.isMain) - Number(a.isMain));
+  const total = photos.length;
+  const current = photos[Math.min(photoIndex, total - 1)] ?? photos[0];
 
   return (
     <div className="flex flex-col h-full">
       <div className="relative h-1/2 min-h-[45%] bg-gray-100">
-        {main ? (
-          <img src={main.url} alt={property.title} className="w-full h-full object-cover" />
+        {current ? (
+          <img src={current.url} alt={property.title} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-300">
             Sin foto
           </div>
         )}
+
+        {/* Navegación de fotos: contador + puntos */}
+        {total > 1 && (
+          <>
+            <div className="absolute top-3 right-3 bg-black/50 text-white text-xs font-medium rounded-full px-2 py-0.5">
+              {Math.min(photoIndex, total - 1) + 1}/{total}
+            </div>
+            <div className="absolute top-3 inset-x-0 flex justify-center gap-1.5">
+              {photos.map((p, i) => (
+                <span
+                  key={p.id}
+                  className={`h-1.5 rounded-full transition-all ${
+                    i === Math.min(photoIndex, total - 1)
+                      ? 'w-5 bg-white'
+                      : 'w-1.5 bg-white/50'
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4">
           <div className="flex items-end justify-between">
             <div>

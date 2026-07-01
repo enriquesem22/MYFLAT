@@ -5,7 +5,7 @@ import { SwipeDeck } from '@/components/swipe/SwipeDeck';
 import { PropertyCard } from '@/components/cards/PropertyCard';
 import { UserCard } from '@/components/cards/UserCard';
 import { EmptyState } from '@/components/common/EmptyState';
-import { HeartIcon, SettingsIcon } from '@/components/common/icons';
+import { BookmarkIcon, HeartIcon, SettingsIcon } from '@/components/common/icons';
 import { useAppStore } from '@/store/useAppStore';
 import { useCurrentUser } from '@/hooks/useCurrentUser';
 import {
@@ -68,16 +68,33 @@ export function DiscoverPage() {
     <AppLayout
       title="Descubrir"
       headerRight={
-        <button onClick={() => navigate('/settings')} className="text-gray-400 hover:text-gray-600">
-          <SettingsIcon width={22} height={22} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => navigate('/saved')}
+            aria-label="Guardados"
+            className="text-gray-400 hover:text-gray-600 p-1"
+          >
+            <BookmarkIcon width={22} height={22} />
+          </button>
+          <button
+            onClick={() => navigate('/settings')}
+            aria-label="Ajustes"
+            className="text-gray-400 hover:text-gray-600 p-1"
+          >
+            <SettingsIcon width={22} height={22} />
+          </button>
+        </div>
       }
     >
       {mode === 'properties' ? (
         <SwipeDeck
           items={propertyItems}
           keyOf={(i) => i.property.id}
-          renderCard={(i) => <PropertyCard property={i.property} compatibility={i.compat} />}
+          renderCard={(i, photoIndex) => (
+            <PropertyCard property={i.property} compatibility={i.compat} photoIndex={photoIndex} />
+          )}
+          photoCountOf={(i) => i.property.photos.length}
+          onOpen={(i) => navigate(`/properties/${i.property.id}`)}
           onDecision={handleProperty}
           emptyState={
             <EmptyState
@@ -97,6 +114,7 @@ export function DiscoverPage() {
           items={userItems}
           keyOf={(i) => i.user.id}
           renderCard={(i) => <UserCard user={i.user} compatibility={i.compat} />}
+          onOpen={(i) => navigate(`/users/${i.user.id}`)}
           onDecision={handleUser}
           emptyState={
             <EmptyState

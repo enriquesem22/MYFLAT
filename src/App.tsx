@@ -7,6 +7,7 @@ import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { OnboardingPage } from '@/pages/OnboardingPage';
 import { DiscoverPage } from '@/pages/DiscoverPage';
+import { SavedPage } from '@/pages/SavedPage';
 import { MatchesPage } from '@/pages/MatchesPage';
 import { ChatPage } from '@/pages/ChatPage';
 import { ProfilePage } from '@/pages/ProfilePage';
@@ -62,6 +63,7 @@ export default function App() {
 
       {/* App (requiere sesión + onboarding) */}
       <Route path="/discover" element={<RequireAuth><DiscoverPage /></RequireAuth>} />
+      <Route path="/saved" element={<RequireAuth><SavedPage /></RequireAuth>} />
       <Route path="/matches" element={<RequireAuth><MatchesPage /></RequireAuth>} />
       <Route path="/matches/:id" element={<RequireAuth><ChatPage /></RequireAuth>} />
       <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />

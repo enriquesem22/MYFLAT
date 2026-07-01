@@ -83,6 +83,10 @@ export interface Property {
   verifiedOwner: boolean;
   hasVideo: boolean;
   photos: PropertyPhoto[];
+  plans?: string[]; // planos del piso (imágenes)
+  videos?: string[]; // vídeos (enlaces)
+  residentIds?: string[]; // personas que viven actualmente en el piso
+  ownerLivesHere?: boolean; // el propietario también vive en el piso
   createdAt: string;
   updatedAt: string;
 }

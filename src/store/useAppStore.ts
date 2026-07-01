@@ -26,6 +26,7 @@ import { demoDocuments, demoInventory } from '@/data/demoFlat';
 import { isSupabaseEnabled } from '@/lib/supabase';
 import {
   fetchAll,
+  persistDelete,
   persistInsert,
   persistUpdate,
   seedIfEmpty,
@@ -79,6 +80,8 @@ interface AppState {
 
   // ---- swipe / likes / matches ----
   swipe: (targetType: Like['targetType'], targetId: string, direction: LikeDirection) => Match | null;
+  /** Quita un elemento de "guardados" (elimina los likes con dirección save). */
+  unsave: (targetId: string) => void;
   getMessages: (matchId: string) => Message[];
   sendMessage: (matchId: string, text: string) => void;
 
@@ -274,6 +277,21 @@ export const useAppStore = create<AppState>()(
           persistInsert('matches', match);
         }
         return match;
+      },
+
+      unsave: (targetId) => {
+        const me = get().currentUserId;
+        if (!me) return;
+        const toRemove = get().likes.filter(
+          (l) => l.fromUserId === me && l.targetId === targetId && l.direction === 'save',
+        );
+        set((s) => ({
+          likes: s.likes.filter(
+            (l) =>
+              !(l.fromUserId === me && l.targetId === targetId && l.direction === 'save'),
+          ),
+        }));
+        toRemove.forEach((l) => persistDelete('likes', l.id));
       },
 
       getMessages: (matchId) =>

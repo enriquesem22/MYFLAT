@@ -125,3 +125,14 @@ export function persistUpdate(
       if (error) console.error(`[myflat] error actualizando ${table}:`, error.message);
     });
 }
+
+export function persistDelete(table: TableName, id: string): void {
+  if (!isSupabaseEnabled || !supabase) return;
+  supabase
+    .from(table)
+    .delete()
+    .eq('id', id)
+    .then(({ error }) => {
+      if (error) console.error(`[myflat] error borrando en ${table}:`, error.message);
+    });
+}

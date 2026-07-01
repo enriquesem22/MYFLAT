@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Property } from '@/types';
+import { imageFileToDataUrl } from '@/utils/media';
+import { CameraIcon, FileIcon, PlusIcon, XIcon } from '@/components/common/icons';
 
 export interface PropertyDraft {
   title: string;
@@ -15,6 +17,10 @@ export interface PropertyDraft {
   bathrooms: number;
   currentRoommates: number;
   description: string;
+  photos: string[]; // data URLs
+  plans: string[]; // data URLs
+  videos: string[]; // enlaces
+  ownerLivesHere: boolean;
 }
 
 interface Props {
@@ -38,10 +44,28 @@ export function PropertyForm({ onSubmit, onCancel }: Props) {
     bathrooms: 1,
     currentRoommates: 2,
     description: '',
+    photos: [],
+    plans: [],
+    videos: [],
+    ownerLivesHere: false,
   });
+  const [videoUrl, setVideoUrl] = useState('');
 
   function set<K extends keyof PropertyDraft>(key: K, value: PropertyDraft[K]) {
     setD((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function addImages(files: FileList | null, key: 'photos' | 'plans') {
+    if (!files) return;
+    const urls: string[] = [];
+    for (const file of Array.from(files)) {
+      try {
+        urls.push(await imageFileToDataUrl(file));
+      } catch {
+        /* ignoramos archivos que no se puedan leer */
+      }
+    }
+    setD((prev) => ({ ...prev, [key]: [...prev[key], ...urls] }));
   }
 
   return (
@@ -154,24 +178,18 @@ export function PropertyForm({ onSubmit, onCancel }: Props) {
           />
         </div>
       </div>
-      <button
-        type="button"
-        onClick={() => set('expensesIncluded', !d.expensesIncluded)}
-        className="w-full flex items-center justify-between py-1"
-      >
-        <span className="text-sm text-gray-700">Gastos incluidos</span>
-        <span
-          className={`w-11 h-6 rounded-full p-0.5 transition ${
-            d.expensesIncluded ? 'bg-brand-500' : 'bg-gray-200'
-          }`}
-        >
-          <span
-            className={`block w-5 h-5 rounded-full bg-white transition ${
-              d.expensesIncluded ? 'translate-x-5' : ''
-            }`}
-          />
-        </span>
-      </button>
+
+      <Toggle
+        label="Gastos incluidos"
+        value={d.expensesIncluded}
+        onChange={(v) => set('expensesIncluded', v)}
+      />
+      <Toggle
+        label="Yo también vivo en este piso"
+        value={d.ownerLivesHere}
+        onChange={(v) => set('ownerLivesHere', v)}
+      />
+
       <div>
         <label className="label">Descripción</label>
         <textarea
@@ -181,7 +199,64 @@ export function PropertyForm({ onSubmit, onCancel }: Props) {
         />
       </div>
 
-      <div className="flex gap-3">
+      {/* --- Media: fotos, planos, vídeos --- */}
+      <MediaUpload
+        label="Fotos"
+        icon={<CameraIcon width={16} height={16} />}
+        items={d.photos}
+        onAdd={(files) => addImages(files, 'photos')}
+        onRemove={(i) => set('photos', d.photos.filter((_, idx) => idx !== i))}
+      />
+      <MediaUpload
+        label="Planos"
+        icon={<FileIcon width={16} height={16} />}
+        items={d.plans}
+        onAdd={(files) => addImages(files, 'plans')}
+        onRemove={(i) => set('plans', d.plans.filter((_, idx) => idx !== i))}
+      />
+
+      <div>
+        <label className="label">Vídeos (enlace)</label>
+        <div className="flex gap-2">
+          <input
+            className="input flex-1"
+            placeholder="https://… (YouTube, Vimeo, etc.)"
+            value={videoUrl}
+            onChange={(e) => setVideoUrl(e.target.value)}
+          />
+          <button
+            type="button"
+            className="btn-secondary px-3"
+            onClick={() => {
+              const v = videoUrl.trim();
+              if (v) {
+                set('videos', [...d.videos, v]);
+                setVideoUrl('');
+              }
+            }}
+          >
+            <PlusIcon width={18} height={18} />
+          </button>
+        </div>
+        {d.videos.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {d.videos.map((v, i) => (
+              <li key={i} className="flex items-center justify-between text-sm text-gray-600">
+                <span className="truncate">{v}</span>
+                <button
+                  type="button"
+                  onClick={() => set('videos', d.videos.filter((_, idx) => idx !== i))}
+                  className="text-red-500 shrink-0 ml-2"
+                >
+                  <XIcon width={16} height={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="flex gap-3 pt-1">
         <button type="button" className="btn-secondary flex-1" onClick={onCancel}>
           Cancelar
         </button>
@@ -193,14 +268,106 @@ export function PropertyForm({ onSubmit, onCancel }: Props) {
   );
 }
 
-/** Convierte un borrador en los campos de Property que faltan por defecto. */
+function MediaUpload({
+  label,
+  icon,
+  items,
+  onAdd,
+  onRemove,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  items: string[];
+  onAdd: (files: FileList | null) => void;
+  onRemove: (index: number) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div>
+      <label className="label">{label}</label>
+      <div className="flex flex-wrap gap-2">
+        {items.map((src, i) => (
+          <div key={i} className="relative">
+            <img src={src} alt="" className="w-16 h-16 rounded-lg object-cover border border-gray-200" />
+            <button
+              type="button"
+              onClick={() => onRemove(i)}
+              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center"
+            >
+              <XIcon width={12} height={12} />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 text-gray-400 flex flex-col items-center justify-center gap-0.5 hover:border-brand-400 hover:text-brand-500"
+        >
+          {icon}
+          <span className="text-[10px]">Añadir</span>
+        </button>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          onAdd(e.target.files);
+          e.target.value = '';
+        }}
+      />
+    </div>
+  );
+}
+
+function Toggle({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className="w-full flex items-center justify-between py-1"
+    >
+      <span className="text-sm text-gray-700">{label}</span>
+      <span
+        className={`w-11 h-6 rounded-full p-0.5 transition ${value ? 'bg-brand-500' : 'bg-gray-200'}`}
+      >
+        <span
+          className={`block w-5 h-5 rounded-full bg-white transition ${value ? 'translate-x-5' : ''}`}
+        />
+      </span>
+    </button>
+  );
+}
+
+/** Convierte un borrador en los campos de Property (incluidas fotos y media). */
 export function draftToPropertyData(
   draft: PropertyDraft,
   ownerId: string,
-): Omit<Property, 'id' | 'createdAt' | 'updatedAt' | 'photos'> {
+): Omit<Property, 'id' | 'createdAt' | 'updatedAt'> {
+  const { photos, plans, videos, ownerLivesHere, ...rest } = draft;
   return {
-    ...draft,
+    ...rest,
     ownerId,
+    photos: photos.map((url, i) => ({
+      id: `ph-${Date.now()}-${i}`,
+      propertyId: '',
+      url,
+      isMain: i === 0,
+    })),
+    plans,
+    videos,
+    ownerLivesHere,
+    residentIds: [],
     rules: {
       smoking: false,
       pets: false,
@@ -211,6 +378,6 @@ export function draftToPropertyData(
     },
     verifiedProperty: false,
     verifiedOwner: false,
-    hasVideo: false,
+    hasVideo: videos.length > 0,
   };
 }
