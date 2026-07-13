@@ -6,13 +6,19 @@
 ;;; Coloca en el centro de cada polilinea cerrada un TEXTO con su superficie
 ;;; redondeada (tabla Bluespace, sin "m2"), lleva cada texto a la CAPA que le
 ;;; corresponde segun el tamano (mapa boxs_texts_layer_names del config.yml) y
-;;; genera una TABLA resumen dibujada en el plano con el numero de cada tamano.
+;;; genera una TABLA resumen dibujada en el plano.
 ;;;
-;;; Al ejecutarlo puedes elegir:
-;;;   - Todo       : todas las polilineas cerradas de una capa (seleccionas
-;;;                  un objeto de esa capa).
-;;;   - Seleccionar: eliges tu manualmente las polilineas (util para hacer el
-;;;                  recuento por plantas).
+;;; Modos:
+;;;   - Plantas : vas haciendo varias selecciones y a cada una le pones un
+;;;               titulo (P00, P01, ...). Cada seleccion es una columna de la
+;;;               tabla; ademas se calcula la columna TOTAL y la columna M2.
+;;;   - Todo    : todas las polilineas cerradas de una capa (una sola columna).
+;;;
+;;; La tabla incluye:
+;;;   Tamano | <P00> | <P01> | ... | TOTAL | M2
+;;;   ...una fila por tamano...
+;;;   TOTAL  | sumas por columna ... | total | area total
+;;;   MID SIZE | ... | media (area total / nº piezas)
 ;;;
 ;;; Uso:
 ;;;   1. En AutoCAD escribe:  APPLOAD  y carga este archivo.
@@ -78,12 +84,24 @@
 )
 
 ;;; --------------------------------------------------------------------------
-;;; Formato del numero: entero sin decimal (4), medio con un decimal (4.5)
+;;; Formato del tamano: entero sin decimal (4), medio con un decimal (4.5)
 ;;; --------------------------------------------------------------------------
 (defun BS-FormatoArea (area)
   (if (= area (fix area))
     (rtos area 2 0)
     (rtos area 2 1)
+  )
+)
+
+;;; --------------------------------------------------------------------------
+;;; Formato de la columna M2 (tamano * cantidad):
+;;;   si el tamano es entero -> 0 decimales; si es medio -> 4 decimales
+;;;   (para reproducir el estilo de la tabla de referencia).
+;;; --------------------------------------------------------------------------
+(defun BS-FormatoM2 (tamano valor)
+  (if (= tamano (fix tamano))
+    (rtos valor 2 0)
+    (rtos valor 2 4)
   )
 )
 
@@ -109,55 +127,153 @@
 )
 
 ;;; --------------------------------------------------------------------------
-;;; Rellena una cadena con espacios por la derecha hasta 'n' caracteres.
+;;; Procesa un conjunto de seleccion:
+;;;   - coloca los textos de area en la capa correspondiente
+;;;   - devuelve la lista de conteo (tamano . cantidad)
 ;;; --------------------------------------------------------------------------
-(defun BS-Pad (s n)
-  (while (< (strlen s) n) (setq s (strcat s " ")))
-  s
+(defun BS-ProcesarSS (ss espacio doc altura
+                      / i obj area-real vr conteo minPt maxPt centro texto capa-destino)
+  (setq i 0 conteo nil)
+  (repeat (sslength ss)
+    (setq obj (vlax-ename->vla-object (ssname ss i)))
+
+    ;; Area geometrica real
+    (setq area-real (vla-get-Area obj))
+    ;; --- Si el dibujo esta en MILIMETROS, descomenta la linea siguiente: ---
+    ;; (setq area-real (/ (vla-get-Area obj) 1000000.0))
+
+    (setq vr (BS-RedondearArea area-real))
+    (setq capa-destino (BS-AsegurarCapa (BS-CapaPorArea area-real) doc))
+    (setq conteo (BS-Incrementar vr conteo))
+
+    ;; Centro de la caja envolvente
+    (vla-GetBoundingBox obj 'minPt 'maxPt)
+    (setq minPt (vlax-safearray->list minPt))
+    (setq maxPt (vlax-safearray->list maxPt))
+    (setq centro
+      (vlax-3d-point
+        (list
+          (/ (+ (car minPt) (car maxPt)) 2.0)
+          (/ (+ (cadr minPt) (cadr maxPt)) 2.0)
+          0.0
+        )
+      )
+    )
+
+    ;; Texto solo con el numero (sin "m2")
+    (setq texto (vla-AddText espacio (BS-FormatoArea vr) centro altura))
+    (vla-put-Alignment texto 10)              ; acAlignmentMiddleCenter
+    (vla-put-TextAlignmentPoint texto centro)
+    (vla-put-Layer texto capa-destino)
+
+    (setq i (1+ i))
+  )
+  conteo
 )
 
 ;;; --------------------------------------------------------------------------
-;;; Dibuja la tabla resumen en el plano.
-;;;   presentes = lista ordenada de (valor . cantidad)
+;;; Dibuja la tabla resumen.
+;;;   grupos = lista de (nombre . conteo) en el orden de las columnas.
 ;;; --------------------------------------------------------------------------
-(defun BS-DibujarTabla (espacio presentes total altura / pt tabla nfilas r)
-  (setq pt (getpoint "\nIndica el punto de insercion de la tabla resumen: "))
-  (if pt
-    (progn
-      ;; filas: titulo + cabecera + una por tamano + total
-      (setq nfilas (+ (length presentes) 3))
-      (setq tabla
-        (vla-AddTable
-          espacio
-          (vlax-3d-point pt)
-          nfilas 2
-          (* altura 2.0)     ; alto de fila
-          (* altura 10.0)    ; ancho de columna
-        )
-      )
-      ;; Ajustes de aspecto (protegidos por si la version no los soporta)
-      (vl-catch-all-apply 'vla-SetTextHeight (list tabla 7 altura))       ; 1+2+4 = todas
-      (vl-catch-all-apply 'vla-SetColumnWidth (list tabla 0 (* altura 12.0)))
-      (vl-catch-all-apply 'vla-SetColumnWidth (list tabla 1 (* altura 8.0)))
+(defun BS-DibujarTabla (espacio grupos altura
+                        / orden present ng ncol pt tabla nfilas r gi ci
+                          gtotales grandTotal totalArea cnt tot m2)
+  (setq orden
+    '(1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0 6.0
+      7.0 8.0 9.0 10.0 12.0 15.0 18.0 21.0 25.0)
+  )
+  ;; tamanos que aparecen en algun grupo
+  (setq present nil)
+  (foreach v orden
+    (if (vl-some '(lambda (g) (assoc v (cdr g))) grupos)
+      (setq present (cons v present))
+    )
+  )
+  (setq present (reverse present))
 
-      ;; Titulo (fila 0, se fusiona automaticamente)
+  (setq ng (length grupos))
+  (setq ncol (+ ng 3))                    ; Tamano + grupos + TOTAL + M2
+  ;; totales por grupo (nº de piezas de cada columna)
+  (setq gtotales
+    (mapcar '(lambda (g) (apply '+ (cons 0 (mapcar 'cdr (cdr g))))) grupos)
+  )
+  (setq grandTotal (apply '+ (cons 0 gtotales)))
+
+  (setq pt (getpoint "\nIndica el punto de insercion de la tabla resumen: "))
+  (if (null pt)
+    (princ "\nNo se indico punto: no se dibujo la tabla.")
+    (progn
+      ;; filas: titulo + cabecera + tamanos + TOTAL + MID SIZE
+      (setq nfilas (+ (length present) 4))
+      (setq tabla
+        (vla-AddTable espacio (vlax-3d-point pt) nfilas ncol
+                      (* altura 2.0) (* altura 8.0))
+      )
+      (vl-catch-all-apply 'vla-SetTextHeight (list tabla 7 altura))  ; 1+2+4 todas
+
+      ;; anchos de columna
+      (vl-catch-all-apply 'vla-SetColumnWidth (list tabla 0 (* altura 7.0)))
+      (setq ci 1)
+      (repeat ng
+        (vl-catch-all-apply 'vla-SetColumnWidth (list tabla ci (* altura 6.0)))
+        (setq ci (1+ ci))
+      )
+      (vl-catch-all-apply 'vla-SetColumnWidth (list tabla ci (* altura 7.0)))       ; TOTAL
+      (vl-catch-all-apply 'vla-SetColumnWidth (list tabla (1+ ci) (* altura 9.0)))  ; M2
+
+      ;; --- Titulo (fila 0, se fusiona sola) ---
       (vla-SetText tabla 0 0 "RESUMEN DE SUPERFICIES")
-      ;; Cabecera (fila 1)
+
+      ;; --- Cabecera (fila 1) ---
       (vla-SetText tabla 1 0 "Tamano")
-      (vla-SetText tabla 1 1 "Cantidad")
-      ;; Datos
-      (setq r 2)
-      (foreach par presentes
-        (vla-SetText tabla r 0 (BS-FormatoArea (car par)))
-        (vla-SetText tabla r 1 (itoa (cdr par)))
+      (setq gi 0)
+      (foreach g grupos
+        (vla-SetText tabla 1 (+ 1 gi) (car g))
+        (setq gi (1+ gi))
+      )
+      (vla-SetText tabla 1 (+ 1 ng) "TOTAL")
+      (vla-SetText tabla 1 (+ 2 ng) "M2")
+
+      ;; --- Filas de datos ---
+      (setq r 2 totalArea 0.0)
+      (foreach v present
+        (vla-SetText tabla r 0 (BS-FormatoArea v))
+        (setq gi 0 tot 0)
+        (foreach g grupos
+          (setq cnt (cdr (assoc v (cdr g))))
+          (if (null cnt) (setq cnt 0))
+          (if (> cnt 0)                       ; en blanco si es 0
+            (vla-SetText tabla r (+ 1 gi) (itoa cnt))
+          )
+          (setq tot (+ tot cnt))
+          (setq gi (1+ gi))
+        )
+        (vla-SetText tabla r (+ 1 ng) (itoa tot))
+        (setq m2 (* v tot))
+        (setq totalArea (+ totalArea m2))
+        (vla-SetText tabla r (+ 2 ng) (BS-FormatoM2 v m2))
         (setq r (1+ r))
       )
-      ;; Total
+
+      ;; --- Fila TOTAL ---
       (vla-SetText tabla r 0 "TOTAL")
-      (vla-SetText tabla r 1 (itoa total))
-      (princ "\nTabla resumen creada.")
+      (setq gi 0)
+      (foreach gt gtotales
+        (vla-SetText tabla r (+ 1 gi) (itoa gt))
+        (setq gi (1+ gi))
+      )
+      (vla-SetText tabla r (+ 1 ng) (itoa grandTotal))
+      (vla-SetText tabla r (+ 2 ng) (rtos totalArea 2 4))
+      (setq r (1+ r))
+
+      ;; --- Fila MID SIZE (media = area total / nº piezas) ---
+      (vla-SetText tabla r 0 "MID SIZE")
+      (if (> grandTotal 0)
+        (vla-SetText tabla r (+ 1 ng) (rtos (/ totalArea grandTotal) 2 4))
+      )
+
+      (princ (strcat "\nTabla creada. Total de piezas: " (itoa grandTotal)))
     )
-    (princ "\nNo se indico punto: no se dibujo la tabla.")
   )
 )
 
@@ -165,8 +281,7 @@
 ;;; Comando principal
 ;;; --------------------------------------------------------------------------
 (defun c:AREASPOL
-  (/ modo capa altura ss i obj area-real area-redondeada capa-destino
-     conteo total presentes orden ent minPt maxPt centro texto doc espacio)
+  (/ modo altura grupos nombre ss conteo ent capa seguir doc espacio)
 
   (vl-load-com)
   (setq doc (vla-get-ActiveDocument (vlax-get-acad-object)))
@@ -177,15 +292,19 @@
     )
   )
 
-  ;; --- Modo de conteo -----------------------------------------------------
-  (initget "Todo Seleccionar")
-  (setq modo
-    (getkword "\nQue contar? [Todo/Seleccionar] <Todo>: ")
-  )
-  (if (null modo) (setq modo "Todo"))
+  ;; Modo
+  (initget "Plantas Todo")
+  (setq modo (getkword "\nModo [Plantas/Todo] <Plantas>: "))
+  (if (null modo) (setq modo "Plantas"))
 
-  ;; --- Obtener el conjunto de polilineas cerradas -------------------------
+  ;; Altura del texto
+  (setq altura (getdist "\nIndica la altura del texto <0.25>: "))
+  (if (null altura) (setq altura 0.25))
+
+  (setq grupos nil)
+
   (if (= modo "Todo")
+    ;; ---------- TODO: una sola columna con toda la capa ----------
     (progn
       (setq ent (entsel "\nSelecciona un objeto de la capa de las polilineas: "))
       (if (null ent)
@@ -198,92 +317,45 @@
           (list '(0 . "LWPOLYLINE") (cons 8 capa) '(-4 . "&") '(70 . 1))
         )
       )
-    )
-    ;; modo "Seleccionar"
-    (progn
-      (princ "\nSelecciona las polilineas cerradas a incluir (por plantas): ")
-      (setq ss
-        (ssget (list '(0 . "LWPOLYLINE") '(-4 . "&") '(70 . 1)))
+      (if ss
+        (setq grupos (list (cons capa (BS-ProcesarSS ss espacio doc altura))))
+        (princ "\nNo se encontraron polilineas cerradas en esa capa.")
       )
     )
-  )
-
-  ;; --- Altura del texto ---------------------------------------------------
-  (setq altura (getdist "\nIndica la altura del texto <0.25>: "))
-  (if (null altura) (setq altura 0.25))
-
-  (if ss
+    ;; ---------- PLANTAS: varias selecciones con titulo ----------
     (progn
-      (setq i 0 conteo nil)
-      (repeat (sslength ss)
-        (setq obj (vlax-ename->vla-object (ssname ss i)))
-
-        ;; Area geometrica real
-        (setq area-real (vla-get-Area obj))
-        ;; --- Si el dibujo esta en MILIMETROS, descomenta la linea siguiente: ---
-        ;; (setq area-real (/ (vla-get-Area obj) 1000000.0))
-
-        (setq area-redondeada (BS-RedondearArea area-real))
-        (setq capa-destino    (BS-AsegurarCapa (BS-CapaPorArea area-real) doc))
-        (setq conteo          (BS-Incrementar area-redondeada conteo))
-
-        ;; Caja envolvente -> centro
-        (vla-GetBoundingBox obj 'minPt 'maxPt)
-        (setq minPt (vlax-safearray->list minPt))
-        (setq maxPt (vlax-safearray->list maxPt))
-        (setq centro
-          (vlax-3d-point
-            (list
-              (/ (+ (car minPt) (car maxPt)) 2.0)
-              (/ (+ (cadr minPt) (cadr maxPt)) 2.0)
-              0.0
+      (princ "\nVe seleccionando por plantas. Deja el titulo VACIO para terminar.")
+      (setq seguir T)
+      (while seguir
+        (setq nombre
+          (getstring T "\nTitulo de la seleccion (P00, P01...) o Enter para terminar: ")
+        )
+        (if (= nombre "")
+          (setq seguir nil)
+          (progn
+            (princ (strcat "\nSelecciona las polilineas de '" nombre "': "))
+            (setq ss (ssget (list '(0 . "LWPOLYLINE") '(-4 . "&") '(70 . 1))))
+            (if ss
+              (progn
+                (setq conteo (BS-ProcesarSS ss espacio doc altura))
+                (setq grupos (cons (cons nombre conteo) grupos))
+                (princ
+                  (strcat "\n  '" nombre "': " (itoa (sslength ss)) " polilineas anadidas.")
+                )
+              )
+              (princ "\n  Seleccion vacia: no se anade este grupo.")
             )
           )
         )
-
-        ;; Texto solo con el numero (sin "m2")
-        (setq texto
-          (vla-AddText espacio (BS-FormatoArea area-redondeada) centro altura)
-        )
-        (vla-put-Alignment texto 10)              ; acAlignmentMiddleCenter
-        (vla-put-TextAlignmentPoint texto centro)
-        (vla-put-Layer texto capa-destino)
-
-        (setq i (1+ i))
       )
-
-      ;; --- Construir lista ordenada de tamanos presentes y total ----------
-      (setq orden
-        '(1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0 6.0
-          7.0 8.0 9.0 10.0 12.0 15.0 18.0 21.0 25.0)
-      )
-      (setq presentes nil total 0)
-      (foreach v orden
-        (if (assoc v conteo)
-          (progn
-            (setq presentes (cons (cons v (cdr (assoc v conteo))) presentes))
-            (setq total (+ total (cdr (assoc v conteo))))
-          )
-        )
-      )
-      (setq presentes (reverse presentes))
-
-      ;; --- Resumen en la linea de comandos --------------------------------
-      (princ "\n\n========= RESUMEN POR TAMANO =========")
-      (foreach par presentes
-        (princ
-          (strcat "\n  Tamano " (BS-Pad (BS-FormatoArea (car par)) 5)
-                  " : " (itoa (cdr par)))
-        )
-      )
-      (princ "\n  -----------------------------------")
-      (princ (strcat "\n  TOTAL   : " (itoa total)))
-      (princ "\n======================================")
-
-      ;; --- Tabla dibujada en el plano -------------------------------------
-      (BS-DibujarTabla espacio presentes total altura)
+      (setq grupos (reverse grupos))
     )
-    (princ "\nNo se encontraron polilineas cerradas.")
+  )
+
+  ;; Dibujar la tabla si hay datos
+  (if grupos
+    (BS-DibujarTabla espacio grupos altura)
+    (princ "\nNo hay datos: no se genera tabla.")
   )
   (princ)
 )
