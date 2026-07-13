@@ -66,7 +66,7 @@
     ((<= area 4.40)  "BS-62-M-4.0 sqm")
     ((<= area 4.60)  "BS-62-M-4.5 sqm")
     ((<= area 5.40)  "BS-62-M-5.0 sqm")
-    ((<= area 6.50)  "BS-62-M-6.0 sqmm")   ; (nombre tal cual en el config.yml)
+    ((<= area 6.50)  "BS-62-M-6.0 sqm")
     ((<= area 7.50)  "BS-62-M-7.0 sqm")
     ((<= area 8.50)  "BS-62-M-8.0 sqm")
     ((<= area 9.50)  "BS-62-M-9.0 sqm")
