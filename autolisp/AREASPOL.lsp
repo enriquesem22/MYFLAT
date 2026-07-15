@@ -32,8 +32,10 @@
 ;;; --------------------------------------------------------------------------
 ;;; Redondeo segun tabla Bluespace (box_target_areas)
 ;;; --------------------------------------------------------------------------
+;;; Areas < 0.85 m2 -> etiqueta 0 (piezas demasiado pequenas, para detectarlas).
 (defun BS-RedondearArea (area)
   (cond
+    ((< area 0.85)   0.0)
     ((<= area 1.25)  1.0)
     ((<= area 1.75)  1.5)
     ((<= area 2.25)  2.0)
@@ -61,6 +63,7 @@
 ;;; --------------------------------------------------------------------------
 (defun BS-CapaPorArea (area)
   (cond
+    ((< area 0.85)   "BS-61-S-0.0 sqm")
     ((<= area 1.25)  "BS-61-S-1.0 sqm")
     ((<= area 1.75)  "BS-61-S-1.5 sqm")
     ((<= area 2.25)  "BS-61-S-2.0 sqm")
@@ -179,7 +182,7 @@
                         / orden present ng ncol pt tabla nfilas r gi ci
                           gtotales grandTotal totalArea cnt tot m2)
   (setq orden
-    '(1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0 6.0
+    '(0.0 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0 6.0
       7.0 8.0 9.0 10.0 12.0 15.0 18.0 21.0 25.0)
   )
   ;; tamanos que aparecen en algun grupo
