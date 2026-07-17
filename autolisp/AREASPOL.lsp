@@ -210,7 +210,7 @@
   ;; Categorias (tamanos por categoria, sin el 20)
   (setq categorias
     (list
-      (list "Small"  '(0.0 1.0 1.5 2.0 2.5 3.0 3.5))
+      (list "Small"  '(1.0 1.5 2.0 2.5 3.0 3.5))
       (list "Medium" '(4.0 4.5 5.0 6.0 7.0 8.0 9.0))
       (list "Large"  '(10.0 12.0 15.0 18.0))
       (list "XLarge" '(21.0 25.0))
@@ -229,8 +229,15 @@
         ncol    (+ ng 5))
 
   ;; Totales por grupo / gran total / area total
+  ;; totales por grupo, excluyendo el tamano 0 (no cuenta en la tabla)
   (setq gtotales
-    (mapcar '(lambda (g) (apply '+ (cons 0 (mapcar 'cdr (cdr g))))) grupos))
+    (mapcar
+      '(lambda (g)
+         (apply '+
+           (cons 0
+             (mapcar 'cdr
+               (vl-remove-if '(lambda (p) (= (car p) 0.0)) (cdr g))))))
+      grupos))
   (setq grandTotal (apply '+ (cons 0 gtotales)))
   (setq totalArea 0.0)
   (foreach cat categorias
