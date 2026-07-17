@@ -6,23 +6,18 @@
 ;;; Coloca en el centro de cada polilinea cerrada un TEXTO con su superficie
 ;;; redondeada (tabla Bluespace, sin "m2"), lleva cada texto a la CAPA que le
 ;;; corresponde segun el tamano (mapa boxs_texts_layer_names del config.yml) y
-;;; genera una TABLA resumen dibujada en el plano.
+;;; genera una TABLA resumen dibujada en el plano al estilo "NUMBER OF UNITS".
+;;;
+;;; La tabla tiene:
+;;;   Size | NUMBER OF UNITS (una columna por planta) | TOTAL UNITS |
+;;;   TOTAL m2 | % Units size (por categoria) | Units (por categoria)
+;;;   ...filas fijas mh 1.5/2.0/2.5 sin numeros...
+;;;   ...una fila por tamano, agrupadas por categoria Small/Medium/Large/XLarge...
+;;;   TOTAL ... y "box mix" (media = area total / nº piezas)
 ;;;
 ;;; Modos:
-;;;   - Plantas : vas haciendo varias selecciones y a cada una le pones un
-;;;               titulo (P00, P01, ...). Cada seleccion es una columna de la
-;;;               tabla; ademas se calcula la columna TOTAL y la columna M2.
-;;;   - Todo    : todas las polilineas cerradas de una capa (una sola columna).
-;;;
-;;; La tabla incluye:
-;;;   Tamano | <P00> | <P01> | ... | TOTAL | M2
-;;;   ...una fila por tamano...
-;;;   TOTAL  | sumas por columna ... | total | area total
-;;;   MID SIZE | ... | media (area total / nº piezas)
-;;;
-;;; Uso:
-;;;   1. En AutoCAD escribe:  APPLOAD  y carga este archivo.
-;;;   2. Ejecuta el comando:  AREASPOL
+;;;   - Plantas : varias selecciones con titulo (+0 Floor, +1 Floor, ...).
+;;;   - Todo    : todas las polilineas cerradas de una capa (una columna).
 ;;;
 ;;; Nota sobre unidades:
 ;;;   El codigo supone que el dibujo esta en METROS. Si dibujas en MILIMETROS,
@@ -31,8 +26,8 @@
 
 ;;; --------------------------------------------------------------------------
 ;;; Redondeo segun tabla Bluespace (box_target_areas)
-;;; --------------------------------------------------------------------------
 ;;; Areas < 0.85 m2 -> etiqueta 0 (piezas demasiado pequenas, para detectarlas).
+;;; --------------------------------------------------------------------------
 (defun BS-RedondearArea (area)
   (cond
     ((< area 0.85)   0.0)
@@ -97,14 +92,22 @@
 )
 
 ;;; --------------------------------------------------------------------------
-;;; Formato de la columna M2 (tamano * cantidad):
-;;;   si el tamano es entero -> 0 decimales; si es medio -> 4 decimales
-;;;   (para reproducir el estilo de la tabla de referencia).
+;;; Formato de m2: entero sin decimal, si no con un decimal (152.5).
 ;;; --------------------------------------------------------------------------
-(defun BS-FormatoM2 (tamano valor)
-  (if (= tamano (fix tamano))
+(defun BS-FormatoM2 (valor)
+  (if (= valor (fix valor))
     (rtos valor 2 0)
-    (rtos valor 2 4)
+    (rtos valor 2 1)
+  )
+)
+
+;;; --------------------------------------------------------------------------
+;;; Porcentaje entero (redondeado) de 'part' sobre 'total'.
+;;; --------------------------------------------------------------------------
+(defun BS-Pct (part total)
+  (if (> total 0)
+    (fix (+ 0.5 (/ (* 100.0 part) total)))
+    0
   )
 )
 
@@ -127,6 +130,28 @@
     (subst (cons clave (1+ (cdr (assoc clave lst)))) (assoc clave lst) lst)
     (cons (cons clave 1) lst)
   )
+)
+
+;;; Cantidad de un tamano 'v' en un grupo 'g' (0 si no hay).
+(defun BS-CntVG (v g / x)
+  (if (setq x (cdr (assoc v (cdr g)))) x 0)
+)
+
+;;; Total de un tamano 'v' sumando todos los grupos.
+(defun BS-SizeTotal (v grupos / s)
+  (setq s 0)
+  (foreach g grupos (setq s (+ s (BS-CntVG v g))))
+  s
+)
+
+;;; Fusion de celdas protegida (por si la version no la soporta).
+(defun BS-Merge (tabla r1 r2 c1 c2)
+  (vl-catch-all-apply 'vla-MergeCells (list tabla r1 r2 c1 c2))
+)
+
+;;; Ancho de columna protegido.
+(defun BS-SetCW (tabla i w)
+  (vl-catch-all-apply 'vla-SetColumnWidth (list tabla i w))
 )
 
 ;;; --------------------------------------------------------------------------
@@ -175,105 +200,139 @@
 )
 
 ;;; --------------------------------------------------------------------------
-;;; Dibuja la tabla resumen.
-;;;   grupos = lista de (nombre . conteo) en el orden de las columnas.
+;;; Dibuja la tabla resumen estilo "NUMBER OF UNITS".
+;;;   grupos = lista de (nombre . conteo) -> una columna por planta.
 ;;; --------------------------------------------------------------------------
 (defun BS-DibujarTabla (espacio grupos altura
-                        / orden present ng ncol pt tabla nfilas r gi ci
-                          gtotales grandTotal totalArea cnt tot m2)
-  (setq orden
-    '(0.0 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0 6.0
-      7.0 8.0 9.0 10.0 12.0 15.0 18.0 21.0 25.0)
-  )
-  ;; tamanos que aparecen en algun grupo
-  (setq present nil)
-  (foreach v orden
-    (if (vl-some '(lambda (g) (assoc v (cdr g))) grupos)
-      (setq present (cons v present))
+                        / categorias mhrows ng ncol nData nfilas pt tabla
+                          r c v cnt tot m2 catName sizes catStart catUnits
+                          gtotales grandTotal totalArea cSize cFloor1 cUni cM2 cPct cUnits)
+  ;; Categorias (tamanos por categoria, sin el 20)
+  (setq categorias
+    (list
+      (list "Small"  '(0.0 1.0 1.5 2.0 2.5 3.0 3.5))
+      (list "Medium" '(4.0 4.5 5.0 6.0 7.0 8.0 9.0))
+      (list "Large"  '(10.0 12.0 15.0 18.0))
+      (list "XLarge" '(21.0 25.0))
     )
   )
-  (setq present (reverse present))
+  (setq mhrows '("mh 1.5" "mh 2.0" "mh 2.5"))
 
   (setq ng (length grupos))
-  (setq ncol (+ ng 3))                    ; Tamano + grupos + TOTAL + M2
-  ;; totales por grupo (nº de piezas de cada columna)
+  ;; indices de columnas
+  (setq cSize   0
+        cFloor1 1
+        cUni    (+ ng 1)     ; TOTAL UNITS
+        cM2     (+ ng 2)     ; TOTAL m2
+        cPct    (+ ng 3)     ; % Units size
+        cUnits  (+ ng 4)     ; Units
+        ncol    (+ ng 5))
+
+  ;; Totales por grupo / gran total / area total
   (setq gtotales
-    (mapcar '(lambda (g) (apply '+ (cons 0 (mapcar 'cdr (cdr g))))) grupos)
-  )
+    (mapcar '(lambda (g) (apply '+ (cons 0 (mapcar 'cdr (cdr g))))) grupos))
   (setq grandTotal (apply '+ (cons 0 gtotales)))
+  (setq totalArea 0.0)
+  (foreach cat categorias
+    (foreach v (cadr cat)
+      (setq totalArea (+ totalArea (* v (BS-SizeTotal v grupos))))))
+
+  ;; nº de filas de datos (mh + tamanos visibles; el 0 solo si aparece)
+  (setq nData (length mhrows))
+  (foreach cat categorias
+    (foreach v (cadr cat)
+      (if (or (/= v 0.0) (> (BS-SizeTotal v grupos) 0))
+        (setq nData (1+ nData)))))
+
+  ;; filas totales = 1 titulo + 2 cabecera + datos + 1 TOTAL
+  (setq nfilas (+ 3 nData 1))
 
   (setq pt (getpoint "\nIndica el punto de insercion de la tabla resumen: "))
   (if (null pt)
     (princ "\nNo se indico punto: no se dibujo la tabla.")
     (progn
-      ;; filas: titulo + cabecera + tamanos + TOTAL + MID SIZE
-      (setq nfilas (+ (length present) 4))
       (setq tabla
         (vla-AddTable espacio (vlax-3d-point pt) nfilas ncol
-                      (* altura 2.0) (* altura 8.0))
-      )
-      (vl-catch-all-apply 'vla-SetTextHeight (list tabla 7 altura))  ; 1+2+4 todas
+                      (* altura 2.0) (* altura 6.0)))
+      (vl-catch-all-apply 'vla-SetTextHeight (list tabla 7 altura))
 
       ;; anchos de columna
-      (vl-catch-all-apply 'vla-SetColumnWidth (list tabla 0 (* altura 7.0)))
-      (setq ci 1)
-      (repeat ng
-        (vl-catch-all-apply 'vla-SetColumnWidth (list tabla ci (* altura 6.0)))
-        (setq ci (1+ ci))
-      )
-      (vl-catch-all-apply 'vla-SetColumnWidth (list tabla ci (* altura 7.0)))       ; TOTAL
-      (vl-catch-all-apply 'vla-SetColumnWidth (list tabla (1+ ci) (* altura 9.0)))  ; M2
+      (BS-SetCW tabla cSize (* altura 7.0))
+      (setq c cFloor1)
+      (repeat ng (BS-SetCW tabla c (* altura 6.0)) (setq c (1+ c)))
+      (BS-SetCW tabla cUni   (* altura 6.0))
+      (BS-SetCW tabla cM2    (* altura 6.0))
+      (BS-SetCW tabla cPct   (* altura 6.0))
+      (BS-SetCW tabla cUnits (* altura 6.0))
 
-      ;; --- Titulo (fila 0, se fusiona sola) ---
-      (vla-SetText tabla 0 0 "RESUMEN DE SUPERFICIES")
+      ;; ---------- Cabecera ----------
+      ;; Fila 0: titulo a todo lo ancho
+      (BS-Merge tabla 0 0 0 (1- ncol))
+      (vla-SetText tabla 0 0 "NUMBER OF UNITS BY SIZE")
+      ;; Fila 1-2: cabecera agrupada
+      (BS-Merge tabla 1 2 cSize cSize)          (vla-SetText tabla 1 cSize "Size")
+      (BS-Merge tabla 1 1 cFloor1 ng)           (vla-SetText tabla 1 cFloor1 "NUMBER OF UNITS")
+      (BS-Merge tabla 1 2 cUni cUni)            (vla-SetText tabla 1 cUni "TOTAL UNITS")
+      (BS-Merge tabla 1 2 cM2 cM2)              (vla-SetText tabla 1 cM2 "TOTAL m2")
+      (BS-Merge tabla 1 2 cPct cPct)            (vla-SetText tabla 1 cPct "% Units size")
+      (BS-Merge tabla 1 2 cUnits cUnits)        (vla-SetText tabla 1 cUnits "Units")
+      ;; Fila 2: nombres de planta
+      (setq c cFloor1)
+      (foreach g grupos (vla-SetText tabla 2 c (car g)) (setq c (1+ c)))
 
-      ;; --- Cabecera (fila 1) ---
-      (vla-SetText tabla 1 0 "Tamano")
-      (setq gi 0)
-      (foreach g grupos
-        (vla-SetText tabla 1 (+ 1 gi) (car g))
-        (setq gi (1+ gi))
-      )
-      (vla-SetText tabla 1 (+ 1 ng) "TOTAL")
-      (vla-SetText tabla 1 (+ 2 ng) "M2")
+      ;; ---------- Filas mh (sin numeros) ----------
+      (setq r 3)
+      (foreach mh mhrows
+        (vla-SetText tabla r cSize mh)
+        (setq c cFloor1)
+        (repeat ng (vla-SetText tabla r c "-") (setq c (1+ c)))
+        (vla-SetText tabla r cUni "-")
+        (vla-SetText tabla r cM2  "-")
+        (setq r (1+ r)))
+      ;; % y Units de mh fusionados y en blanco
+      (BS-Merge tabla 3 (1- r) cPct cPct)   (vla-SetText tabla 3 cPct "-")
+      (BS-Merge tabla 3 (1- r) cUnits cUnits) (vla-SetText tabla 3 cUnits "-")
 
-      ;; --- Filas de datos ---
-      (setq r 2 totalArea 0.0)
-      (foreach v present
-        (vla-SetText tabla r 0 (BS-FormatoArea v))
-        (setq gi 0 tot 0)
-        (foreach g grupos
-          (setq cnt (cdr (assoc v (cdr g))))
-          (if (null cnt) (setq cnt 0))
-          (if (> cnt 0)                       ; en blanco si es 0
-            (vla-SetText tabla r (+ 1 gi) (itoa cnt))
-          )
-          (setq tot (+ tot cnt))
-          (setq gi (1+ gi))
-        )
-        (vla-SetText tabla r (+ 1 ng) (itoa tot))
-        (setq m2 (* v tot))
-        (setq totalArea (+ totalArea m2))
-        (vla-SetText tabla r (+ 2 ng) (BS-FormatoM2 v m2))
-        (setq r (1+ r))
-      )
+      ;; ---------- Filas por categoria ----------
+      (foreach cat categorias
+        (setq catName (car cat) sizes (cadr cat))
+        (setq catStart r catUnits 0)
+        (foreach v sizes
+          (if (or (/= v 0.0) (> (BS-SizeTotal v grupos) 0))
+            (progn
+              (vla-SetText tabla r cSize (BS-FormatoArea v))
+              (setq c cFloor1 tot 0)
+              (foreach g grupos
+                (setq cnt (BS-CntVG v g))
+                (vla-SetText tabla r c (itoa cnt))
+                (setq tot (+ tot cnt))
+                (setq c (1+ c)))
+              (vla-SetText tabla r cUni (itoa tot))
+              (setq m2 (* v tot))
+              (vla-SetText tabla r cM2 (BS-FormatoM2 m2))
+              (setq catUnits (+ catUnits tot))
+              (setq r (1+ r)))))
+        ;; % y Units de la categoria fusionados
+        (if (> r catStart)
+          (progn
+            (BS-Merge tabla catStart (1- r) cPct cPct)
+            (vla-SetText tabla catStart cPct
+              (strcat (itoa (BS-Pct catUnits grandTotal)) "%"))
+            (BS-Merge tabla catStart (1- r) cUnits cUnits)
+            (vla-SetText tabla catStart cUnits (itoa catUnits)))))
 
-      ;; --- Fila TOTAL ---
-      (vla-SetText tabla r 0 "TOTAL")
-      (setq gi 0)
-      (foreach gt gtotales
-        (vla-SetText tabla r (+ 1 gi) (itoa gt))
-        (setq gi (1+ gi))
-      )
-      (vla-SetText tabla r (+ 1 ng) (itoa grandTotal))
-      (vla-SetText tabla r (+ 2 ng) (rtos totalArea 2 4))
-      (setq r (1+ r))
-
-      ;; --- Fila MID SIZE (media = area total / nº piezas) ---
-      (vla-SetText tabla r 0 "MID SIZE")
-      (if (> grandTotal 0)
-        (vla-SetText tabla r (+ 1 ng) (rtos (/ totalArea grandTotal) 2 4))
-      )
+      ;; ---------- Fila TOTAL ----------
+      (vla-SetText tabla r cSize "TOTAL")
+      (setq c cFloor1)
+      (foreach gt gtotales (vla-SetText tabla r c (itoa gt)) (setq c (1+ c)))
+      (vla-SetText tabla r cUni (itoa grandTotal))
+      (vla-SetText tabla r cM2  (BS-FormatoM2 totalArea))
+      ;; box mix = area total / nº piezas
+      (BS-Merge tabla r r cPct cUnits)
+      (vla-SetText tabla r cPct
+        (if (> grandTotal 0)
+          (strcat (rtos (/ totalArea grandTotal) 2 2) " box mix")
+          "-"))
 
       (princ (strcat "\nTabla creada. Total de piezas: " (itoa grandTotal)))
     )
@@ -331,7 +390,7 @@
       (setq seguir T)
       (while seguir
         (setq nombre
-          (getstring T "\nTitulo de la seleccion (P00, P01...) o Enter para terminar: ")
+          (getstring T "\nTitulo de la seleccion (+0 Floor, +1 Floor...) o Enter para terminar: ")
         )
         (if (= nombre "")
           (setq seguir nil)
